@@ -1,0 +1,1912 @@
+---
+title: "LaborLeisure_readin_Feb2022"
+author: "Yue Hu"
+date: "10/02/2022"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+This script is used to read in and process PCST-project data files. 20.06.2021
+For each participant, two data files are generated:
+- part_1: practice sessions (practice_1 & practice_2) and post_practice-questionnaires 
+- part_2: formal experiment and post-questionnaires 
+
+*data structure, practice_2* col. names: 
+trial_type | trial_index | time_elapsed | internal_node_id | version | fullscreen | time_budget | test_part | rt | stimulus | key_press | earned_tokens | choice parameters | switch_count parameters | stay_count parameters | select parameters | fashion_performance | kitten_performance | stroop_performance | balloon_performance
+
+[ col.names ]
+earned_tokens: total tokens earned, updated at menu_selection (not updating if "stay the same website")
+choice parameters: choice_balloon | choice_stroop | choice_fashion | choice_kitten
+switch_count parameters (sum of count of switching choices at each website): switch_kitten_count | switch_fashion_count | switch_balloon_count | switch_stroop_count | switch_count
+stay_count parameters (sum of count of staying choices at each website): stay_kitten_count | stay_fashion_count | stay_balloon_count | stay_stroop_count
+select parameters: select_kitten | select_fashion | select_stroop | select_balloon
+fashion_performance: id_fashion | switch_fashion | stay_fashion
+kitten_performance: id_kitten | switch_kitten | stay_kitten	
+stroop_performance: left_nr | right_nr | left_size | right_size | stroop_hit | stroop_tokens* | ratio_stroop | wrong_stroops | correct_stroops | id_stroop | switch_stroop | stay_stroop | stroop_tokens_count**
+balloon_performance: responses | question_order | balloon_hits | balloon_tokens* | id_balloon| balloon_target | switch_balloon | stay_balloon | balloon_tokens_count**
+id_xxx: marking for each-trial action at websites 
+fullscreen: recored interaction (focus, fullscreenexit, blur, fullscreenenter), might happen when test_part is "blank", check first before filtering out "blank" rows
+
+*: tokens earned at stoop and balloon for each stay, updated at each trial and save in multiple rows
+**: summed tokens earned at stoop and balloon, updated at the end of each stay and save in the last row
+
+
+[ col: test_part ] event_marker
+decision_kitten (rt) : switch_kitten	| stay_kitten
+decision_fashion (rt) : switch_fashion	| stay_fashion
+decision_stroop (rt) : switch_stroop	| stay_stroop	| stroop_tokens_count
+decision_balloon(rt): switch_balloon	| stay_balloon	| balloon_tokens_count
+stroop_keypress (rt): left_nr	| right_nr	| left_size	| right_size	| stroop_hit	| stroop_tokens	| ratio_stroop	| wrong_stroops	| correct_stroops	| id_stroop
+balloon (rt): responses	| question_order	| balloon_hits	| balloon_tokens	| id_balloon	| balloon_target
+1 | 2 | 3 | 4 | timeout (rt): earned_tokens | choice parameters | switch_count parameters | stay_count parameters | select parameters
+kitten: id_kitten
+fashion: id_fashion
+blank: filter out 
+
+start -- timeout: can be used to track time_elapsed (in ms, 1000 ms = 1s)
+col.value of "timeout" is the summarized parameters (earned_tokens | choice parameters | switch_count parameters | stay_count parameters)
+balloon_target: 1- green (large), 2- blue (medium), 3- orange (small)
+
+*data structure, post_practice/pre_exp questionnaires* col. names: 
+pre_aver_1 | ... | pre_aver_16
+
+*data structure, formal_exp* NEW col. names: 
+token_goal | reset_goal | resest_goal_count | gap (earned - goal)
+
+[ col: test_part ] event_marker
+set_goal: token_goal
+goalsetting: token_goal | reset_goal | resest_goal_count | gap | earned_token | select parameters
+
+*data structure, pre_questionnaire* col. names: 
+
+INFO: code | age | gender [1/2/3] | major | nationality | culture | education [1-6] | income
+PANAS[1-5]: PANAS_Interested, PANAS_Distressed, PANAS_Excited, PANAS_Upset, PANAS_Strong, PANAS_Guilty, PANAS_Mental, PANAS_Physical, PANAS_Enthusiastic, PANAS_Proud, PANAS_Irritable, PANAS_Alert, PANAS_Ashamed, PANAS_Inspired, PANAS_Nervous, PANAS_Determined, PANAS_Attentive, PANAS_Jittery, PANAS_Active, PANAS_Aroused
+
+*data structure, post_questionnaire* col. names: 
+payoff: 
+paypal: 
+post_aver_1 | ... | post_aver_16 
+PANAS[1-5]: PANAS_Interested, PANAS_Distressed, PANAS_Excited, PANAS_Upset, PANAS_Strong, PANAS_Guilty, PANAS_Mental, PANAS_Physical, PANAS_Enthusiastic, PANAS_Proud, PANAS_Irritable, PANAS_Alert, PANAS_Ashamed, PANAS_Inspired, PANAS_Nervous, PANAS_Determined, PANAS_Attentive, PANAS_Jittery, PANAS_Active, PANAS_Aroused
+PPS[1-5]: PPS1, PPS2, PPS3, PPS4, PPS5, PPS6, PPS7, PPS8, PPS9, PPS10, PPS11, PPS12
+PS_13[1-5]: PS1, PS2, PS3, PS4, PS5, PS6, PS7, PS8, PS9, PS10, PS11, PS12, PS13
+IPS[1-5]: IPS1, IPS2_R, IPS3, IPS4, IPS5, IPS6_R, IPS7, IPS8, IPS9_R (_R: 5-x)
+BSCS[1-5]: BSCS1, BSCS2, BSCS3, BSCS4, BSCS5, BSCS6, BSCS7, BSCS8, BSCS9, BSCS10, BSCS11, BSCS12, BSCS13
+STS[1-5]: STS1, STS2, STS3, STS4, STS5, STS6, STS7, STS8, STS9, STS10, STS11
+UPPS[1-6]: UPPS1, UPPS2, UPPS3, UPPS4, UPPS5, UPPS6, UPPS7, UPPS8, UPPS9, UPPS10, UPPS11_R, UPPS12, UPPS13, UPPS14, UPPS15_R, UPPS16, UPPS17, UPPS18, UPPS19, UPPS20 (_R: 6-x)
+WTS_you/WTS_other[1-11]: WTS1, WTS2, WTS3, WTS4, WTS5, WTS6, WTS7, WTS8, WTS9, WTS10, WTS11, WTS12, WTS13, WTS14, WTS15, WTS16, WTS17, WTS18, WTS19, WTS20, WTS21, WTS22, WTS23, WTS24, WTS25
+PSS[1-5]: PSS1, PSS2, PSS3, PSS4, PSS5, PSS6, PSS7, PSS8, PSS9, PSS10
+APS[1-5]: APS1_R, APS2_R, APS3_R, APS4_R, APS5_R, APS6_R, APS7_R, APS8_R, APS9, APS10, APS11, APS12, APS13_R, APS14_R, APS15_R, APS16_R
+SDS_17[0/1]: SDS1, SDS2, SDS3, SDS4, SDS5, SDS6, SDS7, SDS8, SDS9, SDS10, SDS11, SDS12, SDS13, SDS14, SDS15, SDS16, SDS17
+pilot_question[1-6]: PILOT1, PILOT2, PILOT3, PILOT4, PILOT5, PILOT6, PILOT7, PILOT8, PILOT9, PILOT10, PILOT11, PILOT12, PILOT13, PILOT14, PILOT15, PILOT16, PILOT17, PILOT18, PILOT19, PILOT20
+
+
+```{r data read in}
+
+library(tidyverse)
+library(dplyr)
+library(zoo) # function "na.locf"
+library(cowplot)
+library(car) # for residualPlot
+library(bruceR)
+library(mediation)
+
+setwd("D:\\Postdoc\\H.uman experiment\\01 Procrastination\\02 filtered_data") # 
+
+```
+
+
+```{r readin fullscreen mode/version/code/token/payoff/paypal}
+
+files_practice = list.files(pattern="Websurf_practice_.*.csv") ## read out files from practice sessions
+files_exp = list.files(pattern="Websurf_formal_.*.csv") ## read out files from formal experiment
+
+# basename.matches <- list.files(pattern="test_de_.*.csv", recursive=TRUE,
+#                                full.names = TRUE)
+# basename.matches
+
+## generate a dataframe with col. "code | version | fullscreenenter | fullscreenexit | blur | focus | code | token | payoff | paypal"
+
+practice_info <- data.frame(code = numeric(), version = numeric(), month = numeric(), day = numeric(), hour = numeric(), min = numeric(), prac_fullscreenenter = numeric(), prac_fullscreenexit = numeric(), prac_blur = numeric(), prac_focus = numeric(), prac_token = numeric(), prac_budget = numeric())
+
+m = 1
+for(i in files_practice) {  ## loop through files
+  print(m)
+  print(i)
+  x <- read.csv((i))  ## x, data in each file
+  practice_info[m,1] <- x$code[x$test_part=='practice_code']
+  practice_info[m,2] <- x$version[1]
+  temp <- gsub("[^20-9.]", "", i) # read out date and time
+  practice_info[m,3] <- str_sub(temp,5,6) # month
+  practice_info[m,4] <- str_sub(temp,7,8) # day
+  practice_info[m,5] <- str_sub(temp,9,10) # hour
+  practice_info[m,6] <- str_sub(temp,11,12) # min
+  practice_info[m,7] <- sum(data.frame(x$fullscreen) == "fullscreenenter")
+  practice_info[m,8] <- sum(data.frame(x$fullscreen) == "fullscreenexit")
+  practice_info[m,9] <- sum(data.frame(x$fullscreen) == "focus")
+  practice_info[m,10] <- sum(data.frame(x$fullscreen) == "blur")
+  practice_info[m,11] <- max(x$earned_tokens, na.rm = TRUE)
+  practice_info[m,12] <- x$time_budget[1]
+  # practice_info[m,13] <- m
+  assign(i, x)
+  m = m + 1
+}
+
+
+exp_info <- data.frame(code = numeric(), version = numeric(), exp_fullscreenenter = numeric(), exp_fullscreenexit = numeric(), exp_blur = numeric(), exp_focus = numeric(), exp_token = numeric(), payoff = numeric(), paypal = numeric(), exp_intial_goal = numeric(), exp_month = numeric(), exp_day = numeric(), exp_hour = numeric(), exp_min = numeric(), ID = numeric())
+
+n = 1
+for(j in files_exp) {  ## loop through files
+  print(n) 
+  print(j) 
+  z <- read.csv((j))  ## x, data in each file
+  exp_info[n,1] <- z$code[z$test_part=='info'][1]
+  exp_info[n,2] <- z$version[1]
+  # temp <- gsub("[^20-9.]", "", i) # read out date and time 
+  # exp_info[n,3] <- str_sub(temp,5,6) # month
+  # exp_info[n,4] <- str_sub(temp,7,8) # day
+  # exp_info[n,5] <- str_sub(temp,9,10) # hour
+  # exp_info[n,6] <- str_sub(temp,11,12) # min 
+  exp_info[n,3] <- sum(data.frame(z$fullscreen) == "fullscreenenter")
+  exp_info[n,4] <- sum(data.frame(z$fullscreen) == "fullscreenexit")
+  exp_info[n,5] <- sum(data.frame(z$fullscreen) == "focus")
+  exp_info[n,6] <- sum(data.frame(z$fullscreen) == "blur")
+  exp_info[n,7] <- max(z$earned_tokens, na.rm = TRUE)
+  exp_info[n,8] <- z$payoff[z$test_part=='payoff_paypal']
+  exp_info[n,9] <- z$paypal[z$test_part=='payoff_paypal']
+  exp_info[n,10] <- na.omit(z$token_goal)[1]
+  temp <- gsub("[^20-9.]", "", j) # read out date and time
+  exp_info[n,11] <- str_sub(temp,5,6) # month
+  exp_info[n,12] <- str_sub(temp,7,8) # day
+  exp_info[n,13] <- str_sub(temp,9,10) # hour
+  exp_info[n,14] <- str_sub(temp,11,12) # min
+  exp_info[n,15] <- n
+  assign(j, z) 
+  n = n + 1
+}
+
+length(exp_info$ID)
+
+write.csv(exp_info,'D:\\Postdoc\\H.uman experiment\\01 Procrastination\\01 raw_data\\indiv_info2.csv')
+
+```
+
+filter out participants 
+
+```{r combine indiv_info}
+# remove participants with empty exp_tokens
+
+exp_info <- exp_info[!grepl("test", exp_info$code),] # remove test_data
+practice_info <- practice_info[!grepl("test", practice_info$code),] # remove test_data
+
+exp_info <- exp_info[!is.na(exp_info$code), ]
+sort(exp_info$ID[!is.na(exp_info$ID)])
+
+# remove participants with empty code
+
+indiv_info <- full_join(practice_info, exp_info, by.x = code)
+sort(indiv_info$ID[!is.na(indiv_info$ID)])
+length(indiv_info$ID[!is.na(indiv_info$ID)])  # remove repeated ID 58 (code Tz31) practice data
+
+head(indiv_info)
+indiv_info_select <- indiv_info %>% 
+                filter(exp_token > 0) %>% 
+                dplyr::select(-c(paypal, version, payoff, prac_fullscreenenter, prac_fullscreenexit, prac_blur, prac_focus, month, day, hour, min, exp_month, exp_day, exp_hour, exp_min)) 
+
+indiv_info_select <- indiv_info_select[order(indiv_info_select$ID),]
+
+write.csv(indiv_info_select,'C:\\Users\\Yue\\Dropbox\\Procrastination_Project\\raw_data\\indiv_info_Feb2022.csv')
+
+
+```
+
+personal information 
+
+```{r readin personal information }
+
+personal_info <- data.frame(
+    age = numeric(), 
+    gender = numeric(), 
+    major = numeric(), 
+    other_major = numeric(), 
+    nation = numeric(), 
+    other_nation = numeric(), 
+    education = numeric(), 
+    income = numeric(), 
+    ID = numeric(), 
+    version = numeric())
+
+n = 1
+for(j in files_exp) {  ## loop through files
+  print(n) 
+  print(j) 
+  z <- read.csv((j))  ## x, data in each file
+  personal_info[n,1] <- z$age[z$test_part=='info'][1]
+  personal_info[n,2] <- z$gender[z$test_part=='info'][1]
+  personal_info[n,3] <- z$major[z$test_part=='info'][1]
+  personal_info[n,4] <- z$other_major[z$test_part=='info'][1]
+  personal_info[n,5] <- z$nation[z$test_part=='info'][1]
+  personal_info[n,6] <- z$other_nation[z$test_part=='info'][1]
+  personal_info[n,7] <- z$education[z$test_part=='info'][1]
+  personal_info[n,8] <- z$income[z$test_part=='info'][1]
+  personal_info[n,9] <- n
+  personal_info[n,10] <- z$version[1]
+  assign(j, z) 
+  n = n + 1
+}
+
+# fill in "other" major or "nationality"
+for (i in 1: length(personal_info$major)){
+  if (personal_info$major[i] == "0"){
+    personal_info$major[i] <- personal_info$other_major[i]
+  } else if (personal_info$major[i] != "0"){
+    personal_info$major[i] <- personal_info$major[i]
+  }
+  i = i + 1
+}
+
+for (j in 1: length(personal_info$nation)){
+  if (personal_info$nation[j] == "0"){
+    personal_info$nation[j] <- personal_info$other_nation[j]
+  } else if (personal_info$nation[j] != "0"){
+    personal_info$nation[j] <- personal_info$nation[j]
+  }
+  j = j + 1
+}
+
+
+i = 1
+for (i in 1: length(personal_info$version)){
+  print(personal_info$version[i])
+  if (personal_info$version[i] == "German"){
+  
+  personal_info$education_rescaled[i] <- ifelse(personal_info$education[i] == '1', 1, 
+                    ifelse(personal_info$education[i] == '2', 1, 
+                           ifelse(personal_info$education[i] == '3', 1, 
+                               ifelse(personal_info$education[i] == '4', 2, 
+                                      ifelse(personal_info$education[i] == '5', 3,
+                                             ifelse(personal_info$education[i] == '6', 4,
+                                                    ifelse(personal_info$education[i] == '7', 4,
+                                                           ifelse(personal_info$education[i] == '8', 5,
+                                                              0))))))))
+  } else if (personal_info$version[i] == "Eng"){
+  
+  personal_info$education_rescaled[i] <- ifelse(personal_info$education[i] == '1', 1, 
+                    ifelse(personal_info$education[i] == '2', 2, 
+                           ifelse(personal_info$education[i] == '3', 2, 
+                               ifelse(personal_info$education[i] == '4', 3, 
+                                      ifelse(personal_info$education[i] == '5', 4,
+                                             ifelse(personal_info$education[i] == '6', 5,
+                                                              0))))))
+  }
+  
+  i = i + 1
+  
+}
+
+personal_info$income_scaled <- ifelse(personal_info$income == '0', 1, 
+                  ifelse(personal_info$income == '499', 2, 
+                         ifelse(personal_info$income == '999', 3, 
+                             ifelse(personal_info$income == '1499', 4, 
+                                    ifelse(personal_info$income == '1999', 5,
+                                           ifelse(personal_info$income == '2499', 6,
+                                                  ifelse(personal_info$income == '2999', 7,
+                                                         8)))))))
+
+
+personal_info_select <- personal_info %>% 
+                        dplyr::select(c(age, gender, education_rescaled, income_scaled, ID)) 
+
+indiv_personal_combined <- left_join(indiv_info_select, personal_info_select, by.x = ID)
+
+write.csv(indiv_personal_combined,'C:\\Users\\Yue\\Dropbox\\Procrastination_Project\\raw_data\\indiv_personal_combined_Feb2022.csv')
+
+
+```
+
+personal questionnaire, all data + 1
+
+```{r readin questionnaire}
+
+questionnaire <- data.frame(
+    kitten_enjoy = numeric(),
+    fashion_enjoy = numeric(),
+    stroop_enjoy = numeric(),
+    balloon_enjoy = numeric(),
+    kitten_want = numeric(),
+    fashion_want = numeric(),
+    stroop_want = numeric(),
+    balloon_want = numeric(),
+    mental_stroop = numeric(),
+    mental_balloon = numeric(),
+    physical_stroop = numeric(),
+    physical_balloon = numeric(),
+    boring_stroop = numeric(),
+    boring_balloon = numeric(),
+    WTP_kitten = numeric(),
+    WTP_fashion = numeric(),
+    # concentration = numeric(),
+    # understand = numeric(),
+    # understand_2 = numeric(),
+    # true_preference = numeric(),
+    # experiment_long = numeric(),
+    # practice_long = numeric(),
+    # questionnaire_long = numeric(),
+    # boring = numeric(),
+    # anonymous = numeric(),
+    # enjoy_fashion = numeric(),
+    # enjoy_kitten = numeric(),
+    # not_entertaining_fashion = numeric(),
+    # not_entertaining_kitten = numeric(),
+    # aversion_balloon = numeric(),
+    # aversion_stroop = numeric(),
+    # internet = numeric(),
+    # video_repeat = numeric(),
+    # better_instruction = numeric(),
+    # should_watch_less_video = numeric(),
+    ID = numeric())
+
+n = 1
+
+for(j in files_exp) {  ## loop through files
+  print(n)
+  print(j)
+  z <- read.csv((j))  ## x, data in each file
+  questionnaire[n,1] <- z$post_aver_1[z$test_part=='post_aver'][1] + 1
+  questionnaire[n,2] <- z$post_aver_2[z$test_part=='post_aver'][1] + 1
+  questionnaire[n,3] <- z$post_aver_3[z$test_part=='post_aver'][1] + 1
+  questionnaire[n,4] <- z$post_aver_4[z$test_part=='post_aver'][1] + 1
+  questionnaire[n,5] <- z$post_aver_5[z$test_part=='post_aver'][1] + 1
+  questionnaire[n,6] <- z$post_aver_6[z$test_part=='post_aver'][1] + 1
+  questionnaire[n,7] <- z$post_aver_7[z$test_part=='post_aver'][1] + 1
+  questionnaire[n,8] <- z$post_aver_8[z$test_part=='post_aver'][1] + 1
+  questionnaire[n,9] <- z$post_aver_9[z$test_part=='post_aver'][2] + 1
+  questionnaire[n,10] <- z$post_aver_10[z$test_part=='post_aver'][2] + 1
+  questionnaire[n,11] <- z$post_aver_11[z$test_part=='post_aver'][2] + 1
+  questionnaire[n,12] <- z$post_aver_12[z$test_part=='post_aver'][2] + 1
+  questionnaire[n,13] <- z$post_aver_13[z$test_part=='post_aver'][2] + 1
+  questionnaire[n,14] <- z$post_aver_14[z$test_part=='post_aver'][2] + 1
+  questionnaire[n,15] <- z$post_aver_15[z$test_part=='post_aver'][2] + 1
+  questionnaire[n,16] <- z$post_aver_16[z$test_part=='post_aver'][2] + 1
+  # questionnaire[n,17] <- z$PILOT1[z$test_part=='UPPS'][2] + 1 # correct as PILOT in the later version
+  # questionnaire[n,18] <- z$PILOT2[z$test_part=='UPPS'][2] + 1
+  # questionnaire[n,19] <- z$PILOT3[z$test_part=='UPPS'][2] + 1
+  # questionnaire[n,20] <- z$PILOT4[z$test_part=='UPPS'][2] + 1
+  # questionnaire[n,21] <- z$PILOT5[z$test_part=='UPPS'][2] + 1
+  # questionnaire[n,22] <- z$PILOT6[z$test_part=='UPPS'][2] + 1
+  # questionnaire[n,23] <- z$PILOT7[z$test_part=='UPPS'][2] + 1
+  # questionnaire[n,24] <- z$PILOT9[z$test_part=='UPPS'][2] + 1
+  # questionnaire[n,25] <- z$PILOT10[z$test_part=='UPPS'][2] + 1
+  # questionnaire[n,26] <- z$PILOT11[z$test_part=='UPPS'][2] + 1
+  # questionnaire[n,27] <- z$PILOT12[z$test_part=='UPPS'][2] + 1
+  # questionnaire[n,28] <- z$PILOT13[z$test_part=='UPPS'][2] + 1
+  # questionnaire[n,29] <- z$PILOT14[z$test_part=='UPPS'][2] + 1
+  # questionnaire[n,30] <- z$PILOT15[z$test_part=='UPPS'][2] + 1
+  # questionnaire[n,31] <- z$PILOT16[z$test_part=='UPPS'][2] + 1
+  # questionnaire[n,32] <- z$PILOT17[z$test_part=='UPPS'][2] + 1
+  # questionnaire[n,33] <- z$PILOT18[z$test_part=='UPPS'][2] + 1
+  # questionnaire[n,34] <- z$PILOT19[z$test_part=='UPPS'][2] + 1
+  # questionnaire[n,35] <- z$PILOT20[z$test_part=='UPPS'][2] + 1
+  questionnaire[n,17] <- n
+  assign(j, z)
+  n = n + 1
+}
+
+
+indiv_personal_questionnaire_combined <- left_join(indiv_personal_combined, questionnaire, by.x = ID)
+write.csv(indiv_personal_questionnaire_combined,'C:\\Users\\Yue\\Dropbox\\Procrastination_Project\\raw_data\\indiv_personal_questionnaire_combined_Feb2022.csv')
+
+```
+
+scale score, all data + 1
+
+```{r readin scale score}
+
+scale_score <- data.frame(
+    PPS = numeric(),
+    IPS = numeric(),
+    PS = numeric(), 
+    onset_PS = numeric(), 
+    sustain_PS = numeric(), 
+    timeliness_PS = numeric(), 
+    BSCS = numeric(), 
+    STS = numeric(), 
+    UPPS = numeric(),
+    PSS = numeric(),
+    APS = numeric(), 
+    SDS = numeric(),
+    WTS = numeric(),
+    ID = numeric(), 
+    IPS_9 = numeric())
+
+# note: from Feb 5, PPS, IPS scale was removed 
+
+n = 1
+for(j in files_exp) {  ## loop through files
+  print(n) 
+  print(j) 
+  z <- read.csv((j))  ## x, data in each file
+     
+  if (is.null(z$PPS1)){
+    scale_score[n,1] <- NA
+  } else {
+  scale_score[n,1] <- z$PPS1[!is.na(z$PPS1)] + z$PPS2[!is.na(z$PPS2)] + z$PPS3[!is.na(z$PPS3)] + z$PPS4[!is.na(z$PPS4)] + z$PPS5[!is.na(z$PPS5)] + z$PPS6[!is.na(z$PPS6)] + z$PPS7[!is.na(z$PPS7)] + z$PPS8[!is.na(z$PPS8)] + z$PPS9[!is.na(z$PPS9)] + z$PPS10[!is.na(z$PPS10)] + z$PPS11[!is.na(z$PPS11)] + z$PPS12[!is.na(z$PPS12)] + 12
+  }
+  
+  if (is.null(z$IPS1)){
+    scale_score[n,2] <- NA
+  } else {
+  scale_score[n,2] <- z$IPS1[!is.na(z$IPS1)] + (5 - z$IPS2_R[!is.na(z$IPS2_R)]) + z$IPS3[!is.na(z$IPS3)] + z$IPS4[!is.na(z$IPS4)] + z$IPS5[!is.na(z$IPS5)] + (5 - z$IPS6_R[!is.na(z$IPS6_R)]) + z$IPS7[!is.na(z$IPS7)] + z$IPS8[!is.na(z$IPS8)] + (5 - z$IPS9_R[!is.na(z$IPS9_R)]) + 9
+  }
+ 
+  if (is.null(z$PS1)){
+    scale_score[n,3] <- NA
+  } else {
+    
+  scale_score[n,3] <- z$PS1[!is.na(z$PS1)] + z$PS2[!is.na(z$PS2)] + z$PS3[!is.na(z$PS3)] + z$PS4[!is.na(z$PS4)] + z$PS5[!is.na(z$PS5)] + z$PS6[!is.na(z$PS6)] + z$PS7[!is.na(z$PS7)] + z$PS8[!is.na(z$PS8)] + z$PS9[!is.na(z$PS9)] + z$PS10[!is.na(z$PS10)] + z$PS11[!is.na(z$PS11)] + z$PS12[!is.na(z$PS12)] + z$PS13[!is.na(z$PS13)] + 13
+  }
+
+  if (is.null(z$PS1)){
+    scale_score[n,4] <- NA
+  } else {
+    
+  scale_score[n,4] <- z$PS1[!is.na(z$PS1)] + z$PS2[!is.na(z$PS2)] + z$PS3[!is.na(z$PS3)] + z$PS4[!is.na(z$PS4)] + z$PS10[!is.na(z$PS10)] + 5
+  }
+  
+  if (is.null(z$PS5)){
+    scale_score[n,5] <- NA
+  } else {
+      
+  scale_score[n,5] <- z$PS5[!is.na(z$PS5)] + z$PS6[!is.na(z$PS6)] + z$PS7[!is.na(z$PS7)] + z$PS8[!is.na(z$PS8)] + z$PS9[!is.na(z$PS9)] + z$PS10[!is.na(z$PS10)] + 6
+  }
+  
+  if (is.null(z$PS11)){
+    scale_score[n,6] <- NA
+  } else {  
+  scale_score[n,6] <- z$PS11[!is.na(z$PS11)] + z$PS12[!is.na(z$PS12)] + z$PS13[!is.na(z$PS13)] + 3
+  }
+  
+  
+  if (is.null(z$BSCS1)){
+    scale_score[n,7] <- NA
+  } else {  
+    
+  # higher BSCS, lower self-control
+  scale_score[n,7] <- (5- z$BSCS1[!is.na(z$BSCS1)]) + z$BSCS2[!is.na(z$BSCS2)] + z$BSCS3[!is.na(z$BSCS3)] + z$BSCS4[!is.na(z$BSCS4)] + z$BSCS5[!is.na(z$BSCS5)] + (5-z$BSCS6[!is.na(z$BSCS6)]) + z$BSCS7[!is.na(z$BSCS7)] + (5-z$BSCS8[!is.na(z$BSCS8)]) + z$BSCS9[!is.na(z$BSCS9)] + z$BSCS10[!is.na(z$BSCS10)] + (5-z$BSCS11[!is.na(z$BSCS11)]) + z$BSCS12[!is.na(z$BSCS12)] + z$BSCS13[!is.na(z$BSCS13)] + 13
+  }
+    
+  if (is.null(z$STS1)){
+    scale_score[n,8] <- NA
+  } else { 
+      
+  scale_score[n,8] <- z$STS1[!is.na(z$STS1)] + z$STS2[!is.na(z$STS2)] + z$STS3[!is.na(z$STS3)] + z$STS4[!is.na(z$STS4)] + z$STS5[!is.na(z$STS5)] + z$STS6[!is.na(z$STS6)] + z$STS7[!is.na(z$STS7)] + z$STS8[!is.na(z$STS8)] + z$STS9[!is.na(z$STS9)] + z$STS10[!is.na(z$STS10)] + z$STS11[!is.na(z$STS11)] + 11
+  }
+  
+  
+  if (is.null(z$UPPS1)){
+    scale_score[n,9] <- NA
+  } else {
+  scale_score[n,9] <- z$UPPS1[!is.na(z$UPPS1)] + z$UPPS2[!is.na(z$UPPS2)] + z$UPPS3[!is.na(z$UPPS3)] + z$UPPS4[!is.na(z$UPPS4)] + z$UPPS5[!is.na(z$UPPS5)] + z$UPPS6[!is.na(z$UPPS6)] + z$UPPS7[!is.na(z$UPPS7)] + z$UPPS8[!is.na(z$UPPS8)] + z$UPPS9[!is.na(z$UPPS9)] + z$UPPS10[!is.na(z$UPPS10)] + (6 - z$UPPS11[!is.na(z$UPPS11)]) + z$UPPS12[!is.na(z$UPPS12)] + z$UPPS13[!is.na(z$UPPS13)] + z$UPPS14[!is.na(z$UPPS14)] + (6 - z$UPPS15[!is.na(z$UPPS15)]) + z$UPPS16[!is.na(z$UPPS16)] + z$UPPS17[!is.na(z$UPPS17)] + z$UPPS18[!is.na(z$UPPS18)] + z$UPPS19[!is.na(z$UPPS19)] + z$UPPS20[!is.na(z$UPPS20)] + 20
+  }
+  
+  # 
+  # scale_score[n,10] <- z$PSS1[!is.na(z$PSS1)] + z$PSS2[!is.na(z$PSS2)] + z$PSS3[!is.na(z$PSS3)] + z$PSS4[!is.na(z$PSS4)] + z$PSS5[!is.na(z$PSS5)] + z$PSS6[!is.na(z$PSS6)] + z$PSS7[!is.na(z$PSS7)] + z$PSS8[!is.na(z$PSS8)] + z$PSS9[!is.na(z$PSS9)] + z$PSS10[!is.na(z$PSS10)]+ 10
+  
+  # scale_score[n,11] <- z$APS1_R[!is.na(z$APS1_R)] + z$APS2_R[!is.na(z$APS2_R)] + z$APS3_R[!is.na(z$APS3_R)] + z$APS4_R[!is.na(z$APS4_R)] + z$APS5_R[!is.na(z$APS5_R)] + z$APS6_R[!is.na(z$APS6_R)] + z$APS7_R[!is.na(z$APS7_R)] + z$APS8_R[!is.na(z$APS8_R)] + (5 - z$APS9[!is.na(z$APS9)]) + (5 - z$APS10[!is.na(z$APS10)]) + (5 - z$APS11[!is.na(z$APS11)]) + (5 - z$APS12[!is.na(z$APS12)]) + z$APS13_R[!is.na(z$APS13_R)] + z$APS14_R[!is.na(z$APS14_R)] + z$APS15_R[!is.na(z$APS15_R)] + z$APS16_R[!is.na(z$APS16_R)] + 16  # higher score means less deliberative procrastination
+  # APS1_R My performance tends to suffer when I have to race against deadlines. "1 - Very seldom or not true of me", "5 - Very often true, or true of me"
+
+    
+  scale_score[n,11] <- 5- z$APS1_R[!is.na(z$APS1_R)] + 5- z$APS2_R[!is.na(z$APS2_R)] + 5- z$APS3_R[!is.na(z$APS3_R)] + 5- z$APS4_R[!is.na(z$APS4_R)] + z$APS5_R[!is.na(z$APS5_R)] + 5- z$APS6_R[!is.na(z$APS6_R)] + 5- z$APS7_R[!is.na(z$APS7_R)] + 5- z$APS8_R[!is.na(z$APS8_R)] + z$APS9[!is.na(z$APS9)] +  z$APS10[!is.na(z$APS10)] +  z$APS11[!is.na(z$APS11)] + z$APS12[!is.na(z$APS12)] + 5- z$APS13_R[!is.na(z$APS13_R)] + 5- z$APS14_R[!is.na(z$APS14_R)] + 5- z$APS15_R[!is.na(z$APS15_R)] + 5- z$APS16_R[!is.na(z$APS16_R)] + 16  # higher score, more deliberative procrastination
+
+  if (is.null(z$SDS1)){
+    scale_score[n,12] <- NA
+  } else {
+    
+  scale_score[n,12] <- z$SDS1[!is.na(z$SDS1)] + z$SDS2[!is.na(z$SDS2)] + z$SDS3[!is.na(z$SDS3)] + z$SDS4[!is.na(z$SDS4)] + z$SDS5[!is.na(z$SDS5)] + z$SDS6[!is.na(z$SDS6)] + z$SDS7[!is.na(z$SDS7)] + z$SDS8[!is.na(z$SDS8)] + z$SDS9[!is.na(z$SDS9)] + z$SDS10[!is.na(z$SDS10)] + z$SDS11[!is.na(z$SDS11)] + z$SDS12[!is.na(z$SDS12)] + z$SDS13[!is.na(z$SDS13)]+ z$SDS14[!is.na(z$SDS14)] + z$SDS15[!is.na(z$SDS15)] + z$SDS16[!is.na(z$SDS16)] + z$SDS17[!is.na(z$SDS17)]
+  }
+  
+  # scale_score[n,13] <- z$WTS1[z$test_part=='WTS'][1]-z$WTS1[z$test_part=='WTS'][2] + z$WTS2[z$test_part=='WTS'][1]-z$WTS2[z$test_part=='WTS'][2] + z$WTS3[z$test_part=='WTS'][1]-z$WTS3[z$test_part=='WTS'][2] + z$WTS4[z$test_part=='WTS'][1]-z$WTS4[z$test_part=='WTS'][2] + z$WTS5[z$test_part=='WTS'][1]-z$WTS5[z$test_part=='WTS'][2] + z$WTS6[z$test_part=='WTS'][1]-z$WTS6[z$test_part=='WTS'][2] + z$WTS7[z$test_part=='WTS'][1]-z$WTS7[z$test_part=='WTS'][2] + z$WTS8[z$test_part=='WTS'][1]-z$WTS8[z$test_part=='WTS'][2] + z$WTS9[z$test_part=='WTS'][1]-z$WTS9[z$test_part=='WTS'][2] + z$WTS10[z$test_part=='WTS'][1]-z$WTS10[z$test_part=='WTS'][2] + z$WTS11[z$test_part=='WTS'][1]-z$WTS11[z$test_part=='WTS'][2] + z$WTS12[z$test_part=='WTS'][1]-z$WTS12[z$test_part=='WTS'][2] + z$WTS13[z$test_part=='WTS'][1]-z$WTS13[z$test_part=='WTS'][2] + z$WTS14[z$test_part=='WTS'][1]-z$WTS14[z$test_part=='WTS'][2] + z$WTS15[z$test_part=='WTS'][1]-z$WTS15[z$test_part=='WTS'][2] + z$WTS16[z$test_part=='WTS'][1]-z$WTS16[z$test_part=='WTS'][2] + z$WTS17[z$test_part=='WTS'][1]-z$WTS17[z$test_part=='WTS'][2] + z$WTS18[z$test_part=='WTS'][1]-z$WTS18[z$test_part=='WTS'][2] + z$WTS19[z$test_part=='WTS'][1]-z$WTS19[z$test_part=='WTS'][2] + z$WTS20[z$test_part=='WTS'][1]-z$WTS20[z$test_part=='WTS'][2] + z$WTS21[z$test_part=='WTS'][1]-z$WTS21[z$test_part=='WTS'][2] + z$WTS22[z$test_part=='WTS'][1]-z$WTS22[z$test_part=='WTS'][2] + z$WTS23[z$test_part=='WTS'][1]-z$WTS23[z$test_part=='WTS'][2] + z$WTS24[z$test_part=='WTS'][1]-z$WTS24[z$test_part=='WTS'][2] + z$WTS25[z$test_part=='WTS'][1]-z$WTS25[z$test_part=='WTS'][2]
+  
+  scale_score[n,14] <- n
+  
+  
+  if (is.null(z$IPS1[!is.na(z$IPS1)])){
+    scale_score[n,15] <- NA
+  } else {
+    
+  scale_score[n,15] <- z$IPS1[!is.na(z$IPS1)] + z$IPS3[!is.na(z$IPS3)] + z$IPS4[!is.na(z$IPS4)] + z$IPS5[!is.na(z$IPS5)] + z$IPS7[!is.na(z$IPS7)] + z$IPS8[!is.na(z$IPS8)] + 6
+  }
+  
+  assign(j, z) 
+  n = n + 1
+}
+
+
+head(scale_score)
+indiv_personal_questionnaire_scale_combined <- left_join(indiv_personal_questionnaire_combined, scale_score, by.x = ID)
+write.csv(indiv_personal_questionnaire_scale_combined,'C:\\Users\\Yue\\Dropbox\\Procrastination_Project\\raw_data\\indiv_personal_questionnaire_scale_combined_Feb2022.csv')
+
+scale_score_select <- scale_score %>% dplyr::select (PPS, IPS, PS, onset_PS, sustain_PS, timeliness_PS, BSCS, STS, APS, IPS_9)
+
+# http://www.sthda.com/english/wiki/correlation-matrix-a-quick-start-guide-to-analyze-format-and-visualize-a-correlation-matrix-using-r-software
+res <- cor(scale_score_select)
+round(res, 2)
+
+library("Hmisc")
+
+# ++++++++++++++++++++++++++++
+# flattenCorrMatrix
+# ++++++++++++++++++++++++++++
+# cormat : matrix of the correlation coefficients
+# pmat : matrix of the correlation p-values
+flattenCorrMatrix <- function(cormat, pmat) {
+  ut <- upper.tri(cormat)
+  data.frame(
+    row = rownames(cormat)[row(cormat)[ut]],
+    column = rownames(cormat)[col(cormat)[ut]],
+    cor  =(cormat)[ut],
+    p = pmat[ut]
+    )
+}
+
+res2 <- rcorr(as.matrix(scale_score_select))
+flattenCorrMatrix(res2$r, res2$P)
+
+
+library(corrplot)
+corrplot(res, type = "upper", order = "hclust", 
+         tl.col = "black", tl.srt = 45)
+
+# corrplot(res2$r, type="upper", order="hclust", 
+#          p.mat = res2$P, sig.level = 0.01, insig = "blank")
+
+
+```
+
+overall task performance
+ 
+```{r readin overall task performance}
+
+overall_performance <- data.frame(
+    ID = numeric(), 
+    earned_tokens = numeric(), 
+    choice_balloon = numeric(), 
+    choice_stroop = numeric(), 
+    choice_fashion = numeric(), 
+    choice_kitten = numeric(), 
+    switch_kitten_count = numeric(), 
+    switch_fashion_count = numeric(), 
+    switch_balloon_count = numeric(), 
+    switch_stroop_count = numeric(), 
+    switch_count = numeric(), 
+    stay_kitten_count = numeric(), 
+    stay_fashion_count = numeric(), 
+    stay_balloon_count = numeric(), 
+    stay_stroop_count = numeric(), 
+    stroop_tokens_count = numeric(), 
+    balloon_tokens_count = numeric(), 
+    payoff_estinamtion = numeric(), 
+    initial_goal = numeric(), 
+    reset_goal_count = numeric(), 
+    gap = numeric(), 
+    switch_tasks_count = numeric(), 
+    choice_leisure_count = numeric(),
+    percentange_stroop = numeric(),
+    switch_count_tasks = numeric(),
+    switch_count_videos = numeric(),
+    switch_count_ratio = numeric(),
+    choice_labor_count = numeric())
+
+n = 1
+for(j in files_exp) {  ## loop through files
+  print(n) 
+  print(j) 
+  z <- read.csv((j))  ## x, data in each file
+  overall_performance[n,1] <- n
+  overall_performance[n,2] <- z$earned_tokens[z$test_part=='timeout']
+  overall_performance[n,3] <- z$choice_balloon[z$test_part=='timeout']
+  overall_performance[n,4] <- z$choice_stroop[z$test_part=='timeout']
+  overall_performance[n,5] <- z$choice_fashion[z$test_part=='timeout']
+  overall_performance[n,6] <- z$choice_kitten[z$test_part=='timeout']
+  overall_performance[n,7] <- z$switch_kitten_count[z$test_part=='timeout']
+  overall_performance[n,8] <- z$switch_fashion_count[z$test_part=='timeout']
+  overall_performance[n,9] <- z$switch_balloon_count[z$test_part=='timeout']
+  overall_performance[n,10] <- z$switch_stroop_count[z$test_part=='timeout']
+  overall_performance[n,11] <- z$switch_count[z$test_part=='timeout']
+  overall_performance[n,12] <- z$stay_kitten_count[z$test_part=='timeout']
+  overall_performance[n,13] <- z$stay_fashion_count[z$test_part=='timeout']
+  overall_performance[n,14] <- z$stay_balloon_count[z$test_part=='timeout']
+  overall_performance[n,15] <- z$stay_stroop_count[z$test_part=='timeout']
+  overall_performance[n,16] <- max(z$stroop_tokens_count[!is.na(z$stroop_tokens_count)])
+  overall_performance[n,17] <- max(z$balloon_tokens_count[!is.na(z$balloon_tokens_count)])
+  overall_performance[n,18] <- max(z$payoff_estinamtion[!is.na(z$payoff_estinamtion)])
+  overall_performance[n,19] <- z$token_goal[z$test_part=='set_goal'][1]
+  overall_performance[n,20] <- max(z$reset_goal_count[!is.na(z$reset_goal_count)])
+  overall_performance[n,21] <- max(z$gap[!is.na(z$gap)])
+  overall_performance[n,22] <- z$switch_balloon_count[z$test_part=='timeout'] + z$switch_stroop_count[z$test_part=='timeout']
+  overall_performance[n,23] <- z$choice_fashion[z$test_part=='timeout'] + z$choice_kitten[z$test_part=='timeout']
+  overall_performance[n,24] <- max(z$stroop_tokens_count[!is.na(z$stroop_tokens_count)]) / z$earned_tokens[z$test_part=='timeout']
+  overall_performance[n,25] <- overall_performance[n,9] + overall_performance[n,10]
+  overall_performance[n,26] <- overall_performance[n,7] + overall_performance[n,8]
+  overall_performance[n,27] <- overall_performance[n,25]/overall_performance[n,11]
+  overall_performance[n,28] <- z$choice_balloon[z$test_part=='timeout'] + z$choice_stroop[z$test_part=='timeout']
+    
+  assign(j, z) 
+  overall_performance[overall_performance == "-Inf"] <- "0"
+  n = n + 1
+}
+
+
+overall_performance$labor_stay <- overall_performance$stay_balloon_count + overall_performance$stay_stroop_count
+overall_performance$leisure_switch <- overall_performance$switch_kitten_count + overall_performance$switch_fashion_count
+overall_performance$labor_switch <- overall_performance$switch_balloon_count + overall_performance$switch_stroop_count
+overall_performance$leisure_stay <- overall_performance$stay_kitten_count + overall_performance$stay_fashion_count
+overall_performance$extra_tokens_earned <- overall_performance$earned_tokens - overall_performance$initial_goal
+
+indiv_personal_questionnaire_scale_performance_combined <- left_join(indiv_personal_questionnaire_scale_combined, overall_performance, by.x = ID)
+
+write.csv(indiv_personal_questionnaire_scale_performance_combined,'C:\\Users\\Yue\\Dropbox\\Procrastination_Project\\raw_data\\indiv_personal_questionnaire_scale_performance_combined_Feb2022.csv')
+
+```
+
+switch_based analysis
+
+```{r readin switch_based data}
+
+## experimental details: 
+##   - tokens earned is updated and accumulated after each trial
+##   - goal re-setting is possible at the selection menu
+
+## data structure:
+# time_elapsed | test_part | token_goal | earned_tokens | stroop_tokens_count | balloon_tokens_count | 
+## test_part: 1 | 2 | 3 | 4 --> earned_tokens update at the selection menu (1- kitten, 2- fashion, 3- stroop, 4- balloon)
+##            decision_balloon -->  balloon_tokens_count update at the end of each balloon trial
+##            decision_stroop -->  stroop_tokens_count update at the end of each stroop trial
+
+# token_node = data.frame(subj = numeric(), node = numeric(), time_lapse = numeric(), earned_tokens = numeric(), time_left = numeric(), gap = numeric())
+
+temp_switch_based = data.frame()  ## earned_tokens as the function of time_elapsed, based on the four tasks swtiches (1, 2, 3, 4)
+temp_reset_goal = data.frame(
+                            ID = numeric(),
+                            reset_count = numeric(), # col 2
+                            initial_goal = numeric(), # col 3
+                            earned_tokens = numeric(), # col 4
+                            final_gap = numeric(), # col 5  earned_tokens - last_goal
+                            goal2 = numeric(), # col 6
+                            goal2_timing = numeric(), # col 7
+                            goal2_tokens = numeric(), # col 8
+                            goal2_gap = numeric(), # col 9
+                            goal3 = numeric(), # col 10
+                            goal3_timing = numeric(), # col 11
+                            goal3_tokens = numeric(), # col 12
+                            goal3_gap = numeric(), # col 13                            
+                            goal4 = numeric(), # col 14
+                            goal4_timing = numeric(), # col 15
+                            goal4_tokens = numeric(), # col 16
+                            goal4_gap = numeric(), # col 17
+                            goal5 = numeric(), # col 18
+                            goal5_timing = numeric(), # col 19
+                            goal5_tokens = numeric(), # col 20
+                            goal5_gap = numeric(), # col 21                            
+                            goal6 = numeric(), # col 22  
+                            goal6_timing = numeric(), # col 23
+                            goal6_tokens = numeric(), # col 24
+                            goal6_gap = numeric(), # col 25                            
+                            goal7 = numeric(), # col 26   
+                            goal7_timing = numeric(), # col 27
+                            goal7_tokens = numeric(), # col 28
+                            goal7_gap = numeric(), # col 29                            
+                            goal8 = numeric(), # col 30   
+                            goal8_timing = numeric(), # col 31
+                            goal8_tokens = numeric(), # col 32
+                            goal8_gap = numeric(),  # col 33
+                            real_reset = numeric(),
+                            initial_gap = numeric()) # earned_tokens - initial_goal
+  
+n = 1
+
+for(j in files_exp) {  ## loop through files
+  print(n) 
+  print(j) 
+  z <- read.csv((j))  ## x, data in each file
+  # z <- read.csv("Websurf_formal_Feb_de_PARTICIPANT_SESSION_2021-04-01_17h21.26.524.csv")
+  
+  # replace blank at "test_part" with selection_menu
+  z$test_part[z$test_part  == "blank"] <- "selection_menu"
+  
+  # add initial_goal, before cutting the time_elapsed from "start", because the initial set_goal happens before starting the task
+  goals <- z$token_goal[z$test_part=="set_goal"]
+  goal_setting <- z[z$test_part=="set_goal", ] %>% dplyr::select(time_elapsed, test_part, token_goal)
+  print(paste("reset_goal times:", length(goals)-1))
+  initial_goal <- goals[1]
+  
+  # subtract data from "start" and "time out" 
+  time_node_1 <- z$time_elapsed[z$test_part=="start"]
+  time_node_2 <- z$time_elapsed[z$test_part=="timeout"]
+  temp <- subset(z, time_elapsed >= time_node_1 & time_elapsed <= time_node_2)
+  
+  # re-counting time_stamp from 0
+  starting_time <- temp$time_elapsed[1] 
+  temp$time_elapsed <- temp$time_elapsed - starting_time
+  
+  # rescale the time in seconds
+  temp$time_elapsed <- temp$time_elapsed / 1000
+  
+  # remove unimportant event-rows
+  temp <- filter(temp, !(test_part %in% c("balloon", "reset_balloon", "reset_stroop", "stroop_feedback", "stroop_keypress")))
+  head(temp)
+  
+  ### read out switch_rt data ### 
+  # temp_rt <- filter(temp, test_part %in% 
+  #     # c("start","selection_menu", "1", "decision_kitten", "2", "decision_fashion", "3", "decision_stroop", "4", "decision_balloon", "timeout", "set_goal", "goalsetting")) %>%
+  #     c("start","selection_menu", "1",  "2", "3",  "4", "timeout", "set_goal", "goalsetting")) %>%
+  #     dplyr::select(time_elapsed, test_part, earned_tokens, token_goal, choice_kitten, choice_fashion, choice_stroop, choice_balloon)
+  # temp_rt$token_goal[1] <- na.omit(temp_rt$token_goal)[1] # copy the initial_goal to the first row of token_goal col
+  # temp_rt$token_goal <- na.locf(temp_rt$token_goal) 
+  # temp_rt <- na.locf(temp_rt) 
+  # temp_rt$test_part[temp_rt$test_part  == "1"] <- "kitten"
+  # temp_rt$test_part[temp_rt$test_part  == "2"] <- "fashion"
+  # temp_rt$test_part[temp_rt$test_part  == "3"] <- "stroop"
+  # temp_rt$test_part[temp_rt$test_part  == "4"] <- "balloon"
+  
+  # read test_part = earned_tokens as the function of time_elapse
+  temp_tokens <- filter(temp, test_part %in% c("1", "2", "3", "4", "timeout", "set_goal", "goalsetting")) %>%
+      dplyr::select(time_elapsed, test_part, earned_tokens, token_goal, stay_balloon_count, stay_stroop_count, stay_kitten_count, stay_fashion_count)
+  
+  # make NA replace with valid data in token_goal
+  temp_token_goal <- temp_tokens %>% filter (test_part == "set_goal") %>% dplyr::select (token_goal)
+  temp_token_goal <- as.vector(unlist(temp_token_goal))
+  token_goal <- c(initial_goal, temp_token_goal) # add the initial goal to the start of token_goal list
+  # token_goal <- na.omit(temp_tokens$token_goal)
+  # token_goal <- c(initial_goal, token_goal) # add the initial goal to the start of token_goal list
+  print(paste("token_goal:", na.omit(token_goal)))
+  temp_reset_goal[n,3] <- initial_goal
+  temp_reset_goal[n,6] <- na.omit(token_goal)[2] # goal2
+  temp_reset_goal[n,10] <- na.omit(token_goal)[3]
+  temp_reset_goal[n,14] <- na.omit(token_goal)[4]
+  temp_reset_goal[n,18] <- na.omit(token_goal)[5]
+  temp_reset_goal[n,22] <- na.omit(token_goal)[6]
+  temp_reset_goal[n,26] <- na.omit(token_goal)[7]
+  temp_reset_goal[n,30] <- na.omit(token_goal)[8]
+  temp_reset_goal[n,4] <- max(na.locf(temp_tokens$earned_tokens))
+  temp_reset_goal[n,2] <- length(goals)-1  # reset count
+  temp_reset_goal[n,34] <- length(unique(goals))-1
+  temp_reset_goal[n,35] <- max(na.locf(temp_tokens$earned_tokens)) -initial_goal
+  
+  temp_tokens$token_goal[1] <- initial_goal
+  temp_tokens$token_goal <- na.locf(temp_tokens$token_goal) # replace NA with the last value and remove the first item for col. token_goal
+  temp_tokens <- na.locf(temp_tokens) # replace NA with the last value for all other cols 
+  # token_goal <- na.locf(token_goal)
+  # token_goal <- token_goal[-1]
+  # temp_tokens$token_goal <- token_goal
+  temp_tokens$goal_reset <- length(goals)-1
+  
+  # read out timing, gap & earned tokens of each goal-resetting from "temp_tokens" and save it to corresponding cols of "temp_reset_goal"
+  which(temp_tokens$test_part == "goalsetting")
+  temp_index_1 <- which(temp_tokens$test_part == "goalsetting")[1]
+  temp_reset_goal[n,7] <- temp_tokens$time_elapsed[temp_index_1] # reset_goal_2_timing, timing of when resetting the goal 
+  temp_reset_goal[n,8] <- temp_tokens$earned_tokens[temp_index_1] # reset_goal_2_tokens, earned tokens when resetting the goal 
+  temp_reset_goal[n,9] <- temp_tokens$earned_tokens[temp_index_1] - temp_tokens$token_goal[temp_index_1] # reset_goal_2_gap 
+
+  temp_index_2 <- which(temp_tokens$test_part == "goalsetting")[2]
+  temp_reset_goal[n,11] <- temp_tokens$time_elapsed[temp_index_2] # reset_goal_3_timing
+  temp_reset_goal[n,12] <- temp_tokens$earned_tokens[temp_index_2] # reset_goal_3_tokens
+  temp_reset_goal[n,13] <- temp_tokens$earned_tokens[temp_index_2] - temp_tokens$token_goal[temp_index_2] # reset_goal_3_gap
+  
+  temp_index_3 <- which(temp_tokens$test_part == "goalsetting")[3]
+  temp_reset_goal[n,15] <- temp_tokens$time_elapsed[temp_index_3] # reset_goal_4_timing
+  temp_reset_goal[n,16] <- temp_tokens$earned_tokens[temp_index_3] # reset_goal_4_tokens
+  temp_reset_goal[n,17] <- temp_tokens$earned_tokens[temp_index_3] - temp_tokens$token_goal[temp_index_3] # reset_goal_4_gap
+
+  temp_index_4 <- which(temp_tokens$test_part == "goalsetting")[4]
+  temp_reset_goal[n,19] <- temp_tokens$time_elapsed[temp_index_4] # reset_goal_5_timing
+  temp_reset_goal[n,20] <- temp_tokens$earned_tokens[temp_index_4] # reset_goal_5_tokens
+  temp_reset_goal[n,21] <- temp_tokens$earned_tokens[temp_index_4] - temp_tokens$token_goal[temp_index_4] # reset_goal_5_gap
+
+  temp_index_5 <- which(temp_tokens$test_part == "goalsetting")[5]
+  temp_reset_goal[n,23] <- temp_tokens$time_elapsed[temp_index_5] # reset_goal_6_timing
+  temp_reset_goal[n,24] <- temp_tokens$earned_tokens[temp_index_5] # reset_goal_6_tokens
+  temp_reset_goal[n,25] <- temp_tokens$earned_tokens[temp_index_5] - temp_tokens$token_goal[temp_index_5] # reset_goal_6_gap
+
+  temp_index_6 <- which(temp_tokens$test_part == "goalsetting")[6]
+  temp_reset_goal[n,27] <- temp_tokens$time_elapsed[temp_index_6] # reset_goal_7_timing
+  temp_reset_goal[n,28] <- temp_tokens$earned_tokens[temp_index_6] # reset_goal_7_tokens
+  temp_reset_goal[n,29] <- temp_tokens$earned_tokens[temp_index_6] - temp_tokens$token_goal[temp_index_6] # reset_goal_7_gap
+
+  temp_index_7 <- which(temp_tokens$test_part == "goalsetting")[7]
+  temp_reset_goal[n,31] <- temp_tokens$time_elapsed[temp_index_7] # reset_goal_8_timing
+  temp_reset_goal[n,32] <- temp_tokens$earned_tokens[temp_index_7] # reset_goal_8_tokens
+  temp_reset_goal[n,33] <- temp_tokens$earned_tokens[temp_index_7] - temp_tokens$token_goal[temp_index_7] # reset_goal_8_gap
+  
+  temp_reset_goal[n,5] <- temp_tokens$earned_tokens[length(temp_tokens$earned_tokens)] - temp_tokens$token_goal[length(temp_tokens$token_goal)] # final_gap
+  
+  # remove rows with test_part "set_goal"
+  temp_tokens <- filter(temp_tokens, !(test_part %in% c("set_goal", "goalsetting")))
+  
+  # adjust tokens_earned: remove the first row, because tokens earned in the last task was only updated when backing to the selection menu
+  earned_tokens_adjust <- temp_tokens$earned_tokens[-1]
+  earned_tokens_adjust <- c(earned_tokens_adjust, max(earned_tokens_adjust))
+  temp_tokens$earned_tokens_adjust <- earned_tokens_adjust
+  
+  # adjust stay_balloon_count &  stay_stroop_count: 
+  stay_balloon_count_adjust <- temp_tokens$stay_balloon_count[-1]
+  stay_balloon_count_adjust <- c(stay_balloon_count_adjust, max(stay_balloon_count_adjust))
+  temp_tokens$stay_balloon_count_adjust <- stay_balloon_count_adjust
+  
+  stay_stroop_count_adjust <- temp_tokens$stay_stroop_count[-1]
+  stay_stroop_count_adjust <- c(stay_stroop_count_adjust, max(stay_stroop_count_adjust))
+  temp_tokens$stay_stroop_count_adjust <- stay_stroop_count_adjust
+  
+  temp_tokens$labor_stay <- temp_tokens$stay_stroop_count_adjust + temp_tokens$stay_balloon_count_adjust
+  
+  # adjust stay_kitten_count &  stay_fashion_count: 
+  stay_kitten_count_adjust <- temp_tokens$stay_kitten_count[-1]
+  stay_kitten_count_adjust <- c(stay_kitten_count_adjust, max(stay_kitten_count_adjust))
+  temp_tokens$stay_kitten_count_adjust <- stay_kitten_count_adjust
+
+  stay_fashion_count_adjust <- temp_tokens$stay_fashion_count[-1]
+  stay_fashion_count_adjust <- c(stay_fashion_count_adjust, max(stay_fashion_count_adjust))
+  temp_tokens$stay_fashion_count_adjust <- stay_fashion_count_adjust
+  
+  temp_tokens$leisure_stay <- temp_tokens$stay_fashion_count_adjust + temp_tokens$stay_kitten_count_adjust
+  
+  # define tokens_per_switch
+  tokens_per_switch <- diff(as.matrix(temp_tokens$earned_tokens_adjust))
+  tokens_per_switch <- c(temp_tokens$earned_tokens_adjust[1],tokens_per_switch) # tokens earned of the first switch read in the earned_tokens_adjust[1] directly
+  temp_tokens$tokens_per_switch <- tokens_per_switch
+  
+  # calculate stay_per_switch (v1)
+  labor_stay_per_switch <- diff(as.matrix(temp_tokens$labor_stay))
+  temp_tokens$labor_stay_per_switch <- c(temp_tokens$labor_stay[1], labor_stay_per_switch)
+
+  leisure_stay_per_switch <- diff(as.matrix(temp_tokens$leisure_stay))
+  temp_tokens$leisure_stay_per_switch <- c(temp_tokens$leisure_stay[1], leisure_stay_per_switch)
+  
+  temp_tokens$stay_per_switch <- temp_tokens$labor_stay_per_switch + temp_tokens$leisure_stay_per_switch
+    
+  # calculate stay_per_switch 
+  stay_balloon_per_switch <- diff(as.matrix(temp_tokens$stay_balloon_count_adjust))
+  stay_balloon_per_switch <- c(temp_tokens$stay_balloon_count_adjust[1], stay_balloon_per_switch)
+  temp_tokens$stay_balloon_per_switch <- stay_balloon_per_switch
+
+  stay_stroop_per_switch <- diff(as.matrix(temp_tokens$stay_stroop_count_adjust))
+  stay_stroop_per_switch <- c(temp_tokens$stay_stroop_count_adjust[1], stay_stroop_per_switch)
+  temp_tokens$stay_stroop_per_switch <- stay_stroop_per_switch
+  
+  stay_kitten_per_switch <- diff(as.matrix(temp_tokens$stay_kitten_count_adjust))
+  stay_kitten_per_switch <- c(temp_tokens$stay_kitten_count_adjust[1], stay_kitten_per_switch)
+  temp_tokens$stay_kitten_per_switch <- stay_kitten_per_switch
+  
+  stay_fashion_per_switch <- diff(as.matrix(temp_tokens$stay_fashion_count_adjust))
+  stay_fashion_per_switch <- c(temp_tokens$stay_fashion_count_adjust[1], stay_fashion_per_switch)
+  temp_tokens$stay_fashion_per_switch <- stay_fashion_per_switch
+  
+  # some participants stayed too long at the last task therefore, the last time_elapsed is way over 360000, should adjust
+  time_out <- temp_tokens$time_elapsed[temp_tokens$test_part == "timeout"]
+  if (time_out > 3650) {
+    print("overtime")
+    temp_tokens$time_elapsed[temp_tokens$test_part == "timeout"] <- 3600
+  }
+  time_elapsed_adjust <- c(temp_tokens$time_elapsed, max(temp_tokens$time_elapsed))
+  time_elapsed_adjust <- time_elapsed_adjust [-1]
+  temp_tokens$time_elapsed_adjust <- time_elapsed_adjust
+  
+  # define time_per_switch
+  time_spent_per_switch <- diff(as.matrix(temp_tokens$time_elapsed))
+  time_spent_per_switch <- c(time_spent_per_switch, 0)
+  temp_tokens$time_spent_per_switch <- time_spent_per_switch  
+  
+  # reward_rate_per_switch
+  reward_rate_per_switch <- temp_tokens$tokens_per_switch / temp_tokens$time_spent_per_switch
+  temp_tokens$reward_rate_per_switch <- reward_rate_per_switch
+    
+  # calculate cumulative reward rate
+  cumulative_reward_rate <- temp_tokens$earned_tokens_adjust / temp_tokens$time_elapsed_adjust
+  temp_tokens$cumulative_reward_rate <- cumulative_reward_rate
+  
+  # calculate gap_reaching switch_based rate v2: diff(gap) / diff(time)
+  temp_tokens$goal_gap <- temp_tokens$earned_tokens_adjust - temp_tokens$token_goal
+
+  # define code of 1 or 0 based on decision_xxx for CurrState
+  CurrState_v1 <- ifelse(temp_tokens$test_part == "4", 1,
+                      ifelse(temp_tokens$test_part == "3", 1,
+                             ifelse(temp_tokens$test_part == "1", 0,
+                                 ifelse(temp_tokens$test_part == "2", 0,
+                                        NA))))
+
+  temp_tokens$CurrState_v1 <- CurrState_v1                             
+
+  # define nextState_v1 (1-labor, 0-leisure)
+  if(length(CurrState_v1) == 1){
+    temp_tokens$nextState_v1 <- NA
+  }else if (length(CurrState_v1) > 1){
+    nextState_v1 <- CurrState_v1[2: length(CurrState_v1)]
+    nextState_v1[length(nextState_v1)+1] <- NA 
+    temp_tokens$nextState_v1 <- nextState_v1
+  }
+  
+  # define code of 1 or 0 based on decision_xxx for CurrState
+  CurrState_v2 <- ifelse(temp_tokens$test_part == "4", 4,
+                      ifelse(temp_tokens$test_part == "3", 3,
+                             ifelse(temp_tokens$test_part == "1", 1,
+                                 ifelse(temp_tokens$test_part == "2", 2,
+                                        NA))))
+
+  temp_tokens$CurrState_v2 <- CurrState_v2 
+  
+  # define nextState_v2
+  if(length(CurrState_v2) == 1){
+    temp_tokens$nextState_v2 <- NA
+  }else if (length(CurrState_v2) > 1){
+    nextState_v2 <- CurrState_v2[2: length(CurrState_v2)]
+    nextState_v2[length(nextState_v2)+1] <- NA 
+    temp_tokens$nextState_v2 <- nextState_v2
+  }
+    
+  # remove rows with test_part "timeout"
+  temp_tokens <- filter(temp_tokens, !(test_part %in% c("timeout")))
+  
+  # add subj_ID
+  subj <- rep(n, times = length(temp_tokens$earned_tokens))
+  temp_tokens$subj <- subj
+  temp_reset_goal$ID[n] <- n
+
+  # add switch_ID
+  switch <- seq(1, length(temp_tokens$earned_tokens), 1)
+  temp_tokens$switch <- switch
+  
+  dat_1 <- indiv_personal_questionnaire_scale_performance_combined
+  
+  # add IPS
+  IPS <- rep(dat_1$IPS[n], times = length(temp_tokens$earned_tokens))
+  temp_tokens$IPS <- IPS
+
+  # add APS
+  APS <- rep(dat_1$APS[n], times = length(temp_tokens$earned_tokens))
+  temp_tokens$APS <- APS
+  
+  # add sustain_PS
+  sustain_PS <- rep(dat_1$sustain_PS[n], times = length(temp_tokens$earned_tokens))
+  temp_tokens$sustain_PS <- sustain_PS
+
+  # add onset_PS
+  onset_PS <- rep(dat_1$onset_PS[n], times = length(temp_tokens$earned_tokens))
+  temp_tokens$onset_PS <- onset_PS
+  
+  # add gender
+  gender <- rep(personal_info$gender[n], times = length(temp_tokens$earned_tokens))
+  temp_tokens$gender <- gender
+  
+  # add age
+  age <- rep(personal_info$age[n], times = length(temp_tokens$earned_tokens))
+  temp_tokens$age <- age
+  
+  # add income
+  income <- rep(personal_info$income[n], times = length(temp_tokens$earned_tokens))
+  temp_tokens$income <- income
+  
+  # add education
+  education <- rep(personal_info$education[n], times = length(temp_tokens$earned_tokens))
+  temp_tokens$education <- education
+  
+  # add time_remained, difference between current time_elapses with the maximum time_elapses (time_node_2)
+  time_remained <- time_node_2 
+    
+  # add new_subj data to df:temp_switch_based
+  temp_switch_based <- rbind(temp_switch_based, temp_tokens)
+  
+  assign(j, z)
+  
+  n = n + 1
+  
+}
+ 
+  
+  temp_switch_based$income_scaled <- ifelse(temp_switch_based$income == '0', 1, 
+                    ifelse(temp_switch_based$income == '499', 2, 
+                           ifelse(temp_switch_based$income == '999', 3, 
+                               ifelse(temp_switch_based$income == '1499', 4, 
+                                      ifelse(temp_switch_based$income == '1999', 5,
+                                             ifelse(temp_switch_based$income == '2499', 6,
+                                                    ifelse(temp_switch_based$income == '2999', 7,
+                                                           8)))))))
+ 
+   write.csv(temp_switch_based,'C:\\Users\\Yue\\Dropbox\\Procrastination_Project\\raw_data\\dat_switch_based_Feb_2022.csv')
+   
+```
+
+second_based analysis
+
+```{r readin second_based data}
+
+## experimental details: 
+##   - tokens earned is updated and accumulated after each trial
+##   - goal re-setting is possible at the selection menu
+
+## data structure:
+# time_elapsed | test_part | token_goal | earned_tokens | stroop_tokens_count | balloon_tokens_count | 
+## test_part: 1 | 2 | 3 | 4 --> earned_tokens update at the selection menu (1- kitten, 2- fashion, 3- stroop, 4- balloon)
+##            decision_balloon -->  balloon_tokens_count update at the end of each balloon trial
+##            decision_stroop -->  stroop_tokens_count update at the end of each stroop trial
+
+temp_second_based = data.frame()  ## earned_tokens as the function of time_elapsed, based on each trial including switches among tasks and stay in each task
+# temp_tokens = data.frame()
+n = 1
+
+for(j in files_exp) {  ## loop through files
+  print(n) 
+  print(j) 
+  z <- read.csv((j))  ## x, data in each file
+   
+  # check if contains these two columns, if not, add an empty column
+  # "balloon_tokens_count" %in% names(z)
+  # "stroop_tokens_count" %in% names(z)
+  
+  if (!is.null(z$balloon_tokens_count)) {
+    print("balloon exists")
+  } else {
+    z$balloon_tokens_count <- NA
+  }
+  
+  if (!is.null(z$stroop_tokens_count)) {
+    print("stroop exists")
+  } else {
+    z$stroop_tokens_count <- rep(NA, times = length(z$earned_tokens))
+  }
+      
+  # add initial_goal, before cutting the time_elapsed from "start", because the initial set_goal happens before starting the task
+  goals <- z$token_goal[z$test_part=="set_goal"]
+  goal_setting <- z[z$test_part=="set_goal",] %>% dplyr::select(time_elapsed, test_part, token_goal)
+  print(paste("reset_goal times:", length(goals)-1))
+  initial_goal <- goals[1]
+  
+  # subtract data from "start" and "time out" 
+  time_node_1 <- z$time_elapsed[z$test_part=="start"]
+  time_node_2 <- z$time_elapsed[z$test_part=="timeout"]
+  temp <- subset(z, time_elapsed >= time_node_1 & time_elapsed <= time_node_2)
+  
+  # re-counting time_stamp from 0
+  starting_time <- temp$time_elapsed[1] 
+  temp$time_elapsed <- temp$time_elapsed - starting_time
+  
+  # rescale the time in seconds
+  temp$time_elapsed <- temp$time_elapsed / 1000
+
+  # some participants stayed too long at the last task therefore, the last time_elapsed is way over 360000, should adjust
+  time_out <- temp$time_elapsed[length(temp$time_elapsed)-1] # read the 2nd from the last value, 
+  if (time_out > 3650) {
+    print("overtime")
+    temp$time_elapsed[length(temp$time_elapsed)-1] <- 3600
+    temp$time_elapsed[length(temp$time_elapsed)] <- 3600
+  }
+
+  # remove unimportant event-rows
+  # temp <- filter(temp, !(test_part %in% c("blank", "balloon", "reset_balloon", "reset_stroop", "stroop_feedback", "stroop_keypress")))
+  temp <- filter(temp, !(test_part %in% c("blank", "balloon", "reset_balloon", "reset_stroop", "stroop_feedback", "stroop_keypress")))
+
+  # read test_part = earned_tokens as the function of time_elapse
+  temp_tokens <- filter(temp, test_part %in% c("start","decision_balloon", "decision_kitten", "decision_fashion", "decision_stroop", "1", "2", "3", "4", "timeout", "set_goal", "goalsetting")) %>%
+      dplyr::select(time_elapsed, test_part)
+  
+  # define code of 1 or 0 for switch_state
+  temp_tokens$State_curr1 <- ifelse(temp_tokens$test_part == "1", 0,
+                                ifelse(temp_tokens$test_part == "2", 0,
+                                       ifelse(temp_tokens$test_part == "3", 1,
+                                           ifelse(temp_tokens$test_part == "4", 1,
+                                                  ifelse(temp_tokens$test_part == "decision_kitten", 0,
+                                                       ifelse(temp_tokens$test_part == "decision_fashion", 0,
+                                                           ifelse(temp_tokens$test_part == "decision_balloon", 1,
+                                                                  ifelse(temp_tokens$test_part == "decision_stroop", 1,
+                                                                    0))))))))
+
+  temp_tokens$State_curr2 <- ifelse(temp_tokens$test_part == "1", 1,
+                              ifelse(temp_tokens$test_part == "2", 2,
+                                     ifelse(temp_tokens$test_part == "3", 3,
+                                         ifelse(temp_tokens$test_part == "4", 4,
+                                                ifelse(temp_tokens$test_part == "decision_kitten", 1,
+                                                     ifelse(temp_tokens$test_part == "decision_fashion", 2,
+                                                         ifelse(temp_tokens$test_part == "decision_balloon", 4,
+                                                                ifelse(temp_tokens$test_part == "decision_stroop", 3,
+                                                                  5))))))))
+  
+  temp_tokens$time_elapsed <- as.integer(temp_tokens$time_elapsed)
+  second_array <- data.frame(time_elapsed = seq(1, 3600, 1)) 
+  temp_temp_tokens <- full_join(temp_tokens, second_array) 
+  temp_temp_tokens <- temp_temp_tokens[order(temp_temp_tokens$time_elapsed),]
+  
+  temp_temp_tokens$State_curr1 <- na.locf(temp_temp_tokens$State_curr1)
+  temp_temp_tokens$State_curr2 <- na.locf(temp_temp_tokens$State_curr2)
+  
+  # # add IPS
+  # IPS <- rep(dat_1$IPS[n], times = length(temp_temp_tokens$State_curr1))
+  # temp_temp_tokens$IPS <- IPS
+  # 
+  # # add reset_goal_count
+  # reset_goal_count <- rep(dat_1$reset_goal_count[n], times = length(temp_temp_tokens$State_curr1))
+  # temp_temp_tokens$reset_goal_count <- reset_goal_count
+  # 
+  # # add APS
+  # APS <- rep(dat_1$APS[n], times = length(temp_temp_tokens$State_curr1))
+  # temp_temp_tokens$APS <- APS
+  # 
+  # # add sustain_PS
+  # sustain_PS <- rep(dat_1$sustain_PS[n], times = length(temp_temp_tokens$State_curr1))
+  # temp_temp_tokens$sustain_PS <- sustain_PS
+  # 
+  # # add onset_PS
+  # onset_PS <- rep(dat_1$onset_PS[n], times = length(temp_temp_tokens$State_curr1))
+  # temp_temp_tokens$onset_PS <- onset_PS
+  
+  # add gender
+  gender <- rep(personal_info$gender[n], times = length(temp_temp_tokens$State_curr1))
+  temp_temp_tokens$gender <- gender
+  
+  # add age
+  age <- rep(personal_info$age[n], times = length(temp_temp_tokens$State_curr1))
+  temp_temp_tokens$age <- age
+  
+  # add income
+  income <- rep(personal_info$income[n], times = length(temp_temp_tokens$State_curr1))
+  temp_temp_tokens$income <- income
+  
+  # add education
+  education <- rep(personal_info$education[n], times = length(temp_temp_tokens$State_curr1))
+  temp_temp_tokens$education <- education
+  
+  temp_temp_tokens$subj <- rep(n, times = length(temp_temp_tokens$State_curr1))
+  
+  # add new_subj data to df:temp_switch_based
+  temp_second_based <- rbind(temp_second_based, temp_temp_tokens)
+
+  
+  assign(j, z)
+  
+  n = n + 1
+  
+}
+
+hist(temp_second_based$State_curr1)
+head(temp_second_based)
+
+temp_second_based <- temp_second_based %>% dplyr::select(-c(test_part))
+
+temp_second_based_CurrState_v1 <- temp_second_based %>% dplyr::select(-c(State_curr2))
+
+temp_second_based_CurrState_v1 <- temp_second_based_CurrState_v1[temp_second_based_CurrState_v1$time_elapsed > 0, ]
+temp_second_based_CurrState_v1 <- temp_second_based_CurrState_v1[temp_second_based_CurrState_v1$time_elapsed < 3601, ]
+
+temp_second_based_CurrState_v1 <- temp_second_based_CurrState_v1 %>% mutate(row = row_number()) %>% dplyr::select(-c(row))
+
+second_dat_2state <- temp_second_based_CurrState_v1 %>% distinct() %>% pivot_wider(., names_from = time_elapsed, values_from = State_curr1, values_fn = list) %>% 
+    unnest(cols = everything()) 
+
+write.csv(second_dat_2state,'C:\\Users\\Yue\\Dropbox\\Procrastination_Project\\raw_data\\second_dat_2state.csv')
+
+# second_dat_2state <- read.csv(file = 'C:\\Users\\Yue\\Dropbox\\Procrastination_Project\\raw_data\\second_dat_2state.csv')
+
+# library(caret)
+# downsample <- downSample(second_dat_2state, second_dat_2state$time_elapsed, list = FALSE, yname = "Class")
+
+
+
+
+```
+
+
+RT of decision on trial_based switch or stay 
+
+```{r readin RT of trial_based decision on switch or stay}
+
+## rt of stay or switch decision can be calculated from the time_diff as time(xxx) - time(decision_xxx)
+
+temp_decision_rt = data.frame()
+n = 1
+cc = 1
+dd = 1
+
+for(j in files_exp) {  ## loop through files
+  print(n) 
+  print(j) 
+  z <- read.csv((j))  ## x, data in each file
+  
+  if (!is.null(z$balloon_tokens_count)) {
+    print("balloon exists")
+  } else {
+    z$balloon_tokens_count <- NA
+  }
+  
+  if (!is.null(z$stroop_tokens_count)) {
+    print("stroop exists")
+  } else {
+    z$stroop_tokens_count <- rep(NA, times = length(z$earned_tokens))
+  }
+
+  # add initial_goal, before cutting the time_elapsed from "start", because the initial set_goal happens before starting the task
+  goals <- z$token_goal[z$test_part=="set_goal"]
+  goal_setting <- z[z$test_part=="set_goal",] %>% dplyr::select(time_elapsed, test_part, token_goal)
+  print(paste("reset_goal times:", length(goals)-1))
+  initial_goal <- goals[1]
+  
+  # subtract data from "start" and "time out" 
+  time_node_1 <- z$time_elapsed[z$test_part=="start"]
+  time_node_2 <- z$time_elapsed[z$test_part=="timeout"]
+  temp <- subset(z, time_elapsed >= time_node_1 & time_elapsed <= time_node_2)
+  
+  # re-counting time_stamp from 0
+  starting_time <- temp$time_elapsed[1] 
+  temp$time_elapsed <- temp$time_elapsed - starting_time
+  
+  # rescale the time in seconds
+  temp$time_elapsed <- temp$time_elapsed / 1000
+  
+  # read test_part = earned_tokens or balloon/stroop/kitten/fashion decision as the function of time_elapse
+  temp_tokens <- filter(temp, !test_part %in% c("blank")) %>% dplyr::select(time_elapsed, test_part, earned_tokens, balloon_tokens_count, stroop_tokens_count, token_goal, stimulus, key_press, rt)
+  
+  # first row value is always 0
+  temp_tokens$balloon_tokens_count[1] <- 0
+  temp_tokens$stroop_tokens_count[1] <- 0
+  
+  # make the NAs in balloon_tokens_count & stroop_tokens_count inherit from the last valid value
+  # https://stackoverflow.com/questions/7735647/replacing-nas-with-latest-non-na-value 
+  temp_tokens$balloon_tokens_count_fill <- na.locf(temp_tokens$balloon_tokens_count)
+  temp_tokens$stroop_tokens_count_fill <- na.locf(temp_tokens$stroop_tokens_count)
+   
+  # combine balloon_tokens_count & stroop_tokens_count into cumulative cumulative_tokens
+  temp_tokens$cumulative_tokens <- temp_tokens$balloon_tokens_count_fill + temp_tokens$stroop_tokens_count_fill
+ 
+  # calculate earned tokens in each trial/row
+  df <- diff(as.matrix(temp_tokens$cumulative_tokens))
+  new_df <- rbind(c(0), df)   # first row = 0, abandon df[length(df)+1] <- NA 
+  temp_tokens$tokens_per_trial <- new_df
+  
+  # merge goal-setting with time_elapsed
+  goal_set <- c()
+  length(goals)
+  if (length(goals) == 1) {  # participants never reset the goal, gap is calculated as the cumulative earned tokens - initial goal
+    goal_set <- rep(initial_goal, times = length(temp_tokens$cumulative_tokens))
+    # goal_gap <- temp_tokens$cumulative_tokens - initial_goal
+  }else if (length(goals) > 1){  # participants have revised the goal during the task
+    # gap <- rep(NA,length(temp_tokens$cumulative_tokens))
+    goal_setting$recalib_time <- (goal_setting$time_elapsed - time_node_1) / 1000
+    time_cut <- goal_setting$recalib_time
+    time_cut <- c(time_cut, max(temp$time_elapsed)) # 
+    goal_cut <- goal_setting$token_goal
+    # token_goal_cut <- goal_setting$token_goal[-1]
+    if (length(goal_setting$recalib_time) == 2){ # rest goal for one time, 
+      y <- length(which(temp_tokens$time_elapsed < time_cut[2]))
+      temp_goal_1 <- rep(goal_cut[1], times = y)
+      temp_goal_2 <- rep(goal_cut[2], times = (length(temp_tokens$time_elapsed) - y))
+      goal_set <- c(temp_goal_1, temp_goal_2)
+    } else if (length(goal_setting$recalib_time) > 2){ # reset goal for 2 times and more
+      i = 1
+      for (i in 1: length(goal_setting$recalib_time)){  # track time_node of each goal resetting during the task, the first one is initial goal setting
+        time_cut[i+1]
+        y <- length(which(temp_tokens$time_elapsed >= time_cut[i] & temp_tokens$time_elapsed < time_cut[i+1])) 
+        temp_goal <- rep(goal_cut[i], times = y)
+        goal_set <- c(goal_set, temp_goal)
+        i = i + 1
+      }
+      goal_set <- c(goal_set, max(goal_cut))
+    }
+  }
+  temp_tokens$goal_set <- goal_set
+  temp_tokens$goal_gap <- temp_tokens$cumulative_tokens - temp_tokens$goal_set
+  
+  # rt of stay or switch decision can be calculated from the time_diff as time(decision_balloon) - time(balloon)
+  # rt of stay or switch decision can be calculated from the time_diff as time(decision_stroop) - time(stroop_keypress)
+  diff_rt <- diff(as.matrix(temp_tokens$time_elapsed))
+  decision_rt <- rbind(c(0), diff_rt)
+  temp_tokens$decision_rt <- decision_rt
+ 
+  # plot stroop_rt
+  # temp_stroop_rt <- temp_tokens[temp_tokens$test_part == "stroop_keypress", ]$rt
+  
+  # remove blank event-rows
+  temp_tokens <- filter(temp_tokens, !test_part %in% c("start", "stroop_feedback", "reset_balloon", "reset_stroop", "balloon", "kitten", "stroop_keypress", "set_goal", "goalsetting", "fashion", "timeout")) 
+  
+  # decide choice: 0-stay, 1-switch based on key_press
+  choice <- ifelse(temp_tokens$key_press == "89", 0,
+                      ifelse(temp_tokens$key_press == "78", 1,
+                                        NA))
+  temp_tokens$choice <- choice
+  temp_tokens <- temp_tokens %>% dplyr::select(time_elapsed, test_part, cumulative_tokens, decision_rt, goal_gap, choice, tokens_per_trial)
+  
+  # remove empty test_part rows
+  temp_tokens <- temp_tokens[!(temp_tokens$test_part == ""), ]
+  temp_tokens <- temp_tokens[!(temp_tokens$test_part == "initial_goal_set"), ]
+  
+  # # add switch count (start from 1, and add 1 after each switch, identify as test_part = 1 / 2 / 3 / 4 / timeout (last row)
+  temp_tokens$random_na <- ifelse(temp_tokens$test_part == '1', 1, 
+                    ifelse(temp_tokens$test_part == '2', 2, 
+                           ifelse(temp_tokens$test_part == '3', 3, 
+                               ifelse(temp_tokens$test_part == '4', 4, 
+                                      ifelse(temp_tokens$test_part == 'timeout', 'timeout',
+                                                           NA)))))
+  
+  location <- which(!is.na(temp_tokens$random_na)) # find which row 
+  temp_tokens$switch_ID <- temp_tokens$random_na # copy earned_tokens col
+  temp_tokens$cumu_trials <- temp_tokens$random_na # copy earned_tokens col
+  temp_c <- seq(1, length(which(!is.na(temp_tokens$switch_ID))), by=1)  # generate sequential array based on non-na values
+  # # replace non-na value in temp_tokens$switch_ID with sequential count 
+  for (z in 1: length(temp_c)){
+    temp_tokens$switch_ID[location[z]] <- temp_c[z]
+    z = z + 1
+  }
+  temp_tokens$switch_ID <- na.locf(temp_tokens$switch_ID) # last ID is time_out
+  
+  # here to creat cumulative trial_ID for each switch_ID
+  dat_cumu_trials <- NULL
+  y = 1
+  for (y in unique(as.numeric(temp_tokens$switch_ID))){
+    temp_dat <- temp_tokens[temp_tokens$switch_ID == y, ]
+    max_num <- length(temp_dat$cumu_trials) - 1
+    temp_trials <- c(temp_dat$cumu_trials[1], seq(1, max_num, by=1))
+    temp_trials <- as.data.frame(temp_trials)
+    dat_cumu_trials <- as.data.frame(dat_cumu_trials)
+    dat_cumu_trials <- rbind(dat_cumu_trials,temp_trials) 
+    y = y + 1
+  }
+  temp_tokens$cumu_trials <- dat_cumu_trials$temp_trials
+  
+  # # define code of 1 or 0 for switch_state
+  # temp_tokens$Switch_State_curr <- ifelse(temp_tokens$test_part == "decision_balloon", 1,
+  #                     ifelse(temp_tokens$test_part == "decision_stroop", 1,
+  #                            ifelse(temp_tokens$test_part == "decision_kitten", 0,
+  #                                ifelse(temp_tokens$test_part == "decision_fashion", 0,
+  #                                       NA))))
+  # # define Switch_State_pre
+  # Switch_State_pre <- temp_tokens$Switch_State_curr[1: length(temp_tokens$Switch_State_curr)-1]
+  # Switch_State_pre <- c(NA, Switch_State_pre)
+  # temp_tokens$Switch_State_pre <- Switch_State_pre
+  
+  # add subj_ID
+  subj <- rep(n, times = length(temp_tokens$decision_rt))
+  temp_tokens$subj <- subj
+
+  # add initial_goal
+  initial_goal <- rep(temp_reset_goal$initial_goal[n], times = length(temp_tokens$decision_rt))
+  temp_tokens$initial_goal <- initial_goal
+
+  # add reset_goal
+  reset_goal_count <- rep(temp_reset_goal$reset_count[n], times = length(temp_tokens$decision_rt))
+  temp_tokens$reset_goal_count <- reset_goal_count
+
+  # add IPS
+  IPS <- rep(dat_1$IPS[n], times = length(temp_tokens$decision_rt))
+  temp_tokens$IPS <- IPS
+
+  # add APS
+  APS <- rep(dat_1$APS[n], times = length(temp_tokens$decision_rt))
+  temp_tokens$APS <- APS
+  
+  ## add subj_reset_ID
+  if (length(goals) == 1){
+    
+    temp_tokens$subj_reset0 <- cc 
+    temp_tokens$subj_reset <- NA 
+    cc <- cc + 1
+    dd <- dd + 0
+    
+    } else if (length(goals) > 1){
+      
+      temp_tokens$subj_reset0 <- NA 
+      temp_tokens$subj_reset <- dd
+      cc <- cc + 0
+      dd <- dd + 1
+      
+    }
+  
+  temp_tokens <- temp_tokens[!is.na(temp_tokens$choice),]
+  
+  ## add trial_ID
+  trial <- seq(1, length(temp_tokens$switch_ID), 1)
+  temp_tokens$trial <- trial
+  
+  assign(j, z) 
+  
+  # add new_subj data to df:temp_decision_rt
+  temp_decision_rt <- rbind(temp_decision_rt, temp_tokens)
+  
+  n = n + 1
+}
+ 
+  write.csv(temp_decision_rt,'C:\\Users\\Yue\\Dropbox\\Procrastination_Project\\raw_data\\dat_decision_rt_Feb_2022.csv')
+
+```
+
+trial_based analysis
+
+```{r readin trial_based data}
+
+## experimental details: 
+##   - tokens earned is updated and accumulated after each trial
+##   - goal re-setting is possible at the selection menu
+
+## data structure:
+# time_elapsed | test_part | token_goal | earned_tokens | stroop_tokens_count | balloon_tokens_count | 
+## test_part: 1 | 2 | 3 | 4 --> earned_tokens update at the selection menu (1- kitten, 2- fashion, 3- stroop, 4- balloon)
+##            decision_balloon -->  balloon_tokens_count update at the end of each balloon trial
+##            decision_stroop -->  stroop_tokens_count update at the end of each stroop trial
+
+temp_trial_based = data.frame()  ## earned_tokens as the function of time_elapsed, based on each trial including switches among tasks and stay in each task
+n = 1
+cc = 1
+dd = 1
+
+for(j in files_exp) {  ## loop through files
+  print(n) 
+  print(j)
+  z <- read.csv((j))  ## x, data in each file
+  # z <- read.csv("Websurf_formal_Feb_en_PARTICIPANT_SESSION_2021-12-16_22h07.40.840.csv")
+  # check if contains these two columns, if not, add an empty column
+  # "balloon_tokens_count" %in% names(z)
+  # "stroop_tokens_count" %in% names(z)
+  
+  if (!is.null(z$balloon_tokens_count)) {
+    print("balloon exists")
+  } else {
+    z$balloon_tokens_count <- NA
+  }
+  
+  if (!is.null(z$stroop_tokens_count)) {
+    print("stroop exists")
+  } else {
+    z$stroop_tokens_count <- rep(NA, times = length(z$earned_tokens))
+  }
+      
+  # add initial_goal, before cutting the time_elapsed from "start", because the initial set_goal happens before starting the task
+  goals <- z$token_goal[z$test_part=="set_goal"]
+  goal_setting <- z[z$test_part=="set_goal",] %>% dplyr::select(time_elapsed, test_part, token_goal)
+  print(paste("reset_goal times:", length(goals)-1))
+  initial_goal <- goals[1]
+  
+  # subtract data from "start" and "time out" 
+  time_node_1 <- z$time_elapsed[z$test_part=="start"]
+  time_node_2 <- z$time_elapsed[z$test_part=="timeout"]
+  temp <- subset(z, time_elapsed >= time_node_1 & time_elapsed <= time_node_2)
+  
+  # re-counting time_stamp from 0
+  starting_time <- temp$time_elapsed[1] 
+  temp$time_elapsed <- temp$time_elapsed - starting_time
+  
+  # rescale the time in seconds
+  temp$time_elapsed <- temp$time_elapsed / 1000
+
+  # some participants stayed too long at the last task therefore, the last time_elapsed is way over 360000, should adjust
+  time_out <- temp$time_elapsed[length(temp$time_elapsed)-1] # read the 2nd from the last value, 
+  if (time_out > 3650) {
+    print("overtime")
+    temp$time_elapsed[length(temp$time_elapsed)-1] <- 3600
+    temp$time_elapsed[length(temp$time_elapsed)] <- 3600
+  }
+  
+  # remove unimportant event-rows
+  # temp <- filter(temp, !(test_part %in% c("blank", "balloon", "reset_balloon", "reset_stroop", "stroop_feedback", "stroop_keypress")))
+  temp <- filter(temp, !(test_part %in% c("blank", "balloon", "reset_balloon", "reset_stroop", "stroop_feedback", "stroop_keypress")))
+
+  # read test_part = earned_tokens or balloon/stroop/kitten/fashion decision as the function of time_elapse
+  temp_tokens <- filter(temp, test_part %in% c("timeout", '1', '2', '3', '4', "decision_balloon", "decision_stroop", "decision_kitten", "decision_fashion","set_goal")) %>% dplyr::select(time_elapsed, test_part, earned_tokens, balloon_tokens_count, stroop_tokens_count, token_goal, stay_balloon_count, stay_stroop_count, stay_kitten_count, stay_fashion_count, key_press)
+  
+  # add switch count (start from 1, and add 1 after each switch, identify as when there is a valid row with earned_tokens)
+  temp_tokens$earned_tokens[!duplicated(temp_tokens$earned_tokens)]
+  # temp_tokens$earned_tokens[temp_tokens$earned_tokens == 0] <- NA
+  temp_tokens$switch_ID <- temp_tokens$earned_tokens # copy earned_tokens col
+  temp_tokens$temp_tokens_switch <- temp_tokens$earned_tokens # copy earned_tokens col
+  
+  location <- which(!is.na(temp_tokens$switch_ID)) # find which row has non-na values
+  temp_c <- seq(1, length(which(!is.na(temp_tokens$switch_ID))), by=1)  # generate sequential array based on non-na values
+  temp_tokens_switch <- c(diff(na.omit((temp_tokens$earned_tokens))), 0)
+  # replace non-na value in temp_tokens$switch_ID with sequential count 
+  for (z in 1: length(temp_c)){
+    temp_tokens$switch_ID[location[z]] <- temp_c[z]
+    z = z + 1
+  }
+  for (y in 1: length(temp_c)){
+    temp_tokens$temp_tokens_switch[location[y]] <- temp_tokens_switch[y]
+    y = y + 1
+  }
+      
+  if (n == 96){ # special subj_96
+    temp_tokens$switch_ID[1] = 1
+    temp_tokens$temp_tokens_switch[1] = 0
+    temp_tokens$switch_ID <- na.locf(temp_tokens$switch_ID)
+  } else if (n != 96){
+    temp_tokens$switch_ID <- na.locf(temp_tokens$switch_ID)
+  }
+  
+  temp_tokens$switch_ID <- na.locf(temp_tokens$switch_ID) # last ID is time_out
+  temp_tokens$tokens_switch <- na.locf(temp_tokens$temp_tokens_switch)
+  
+  # define code of 1 or 0 for switch_state
+  temp_tokens$Switch_State_curr <- ifelse(temp_tokens$test_part == "decision_balloon", 1,
+                      ifelse(temp_tokens$test_part == "decision_stroop", 1,
+                             ifelse(temp_tokens$test_part == "decision_kitten", 0,
+                                 ifelse(temp_tokens$test_part == "decision_fashion", 0,
+                                        NA))))
+  # define Switch_State_pre
+  Switch_State_pre <- temp_tokens$Switch_State_curr[1: length(temp_tokens$Switch_State_curr)-1]
+  Switch_State_pre <- c(NA, Switch_State_pre)
+  temp_tokens$Switch_State_pre <- Switch_State_pre
+  
+  # code for stay/switch in the labor tasks at single trial-level 
+  a = 1
+  for (a in 1: length(temp_tokens$test_part)){
+    if (temp_tokens$test_part[a] == 'decision_stroop'){
+      if (temp_tokens$key_press[a] == '89'){
+        temp_tokens$labor_stay_code[a] = 1
+      } else if (temp_tokens$key_press[a] == '78'){
+        temp_tokens$labor_stay_code[a] = 0
+      }
+    } 
+    else if (temp_tokens$test_part[a] == 'decision_balloon'){
+      if (temp_tokens$key_press[a] == '89'){
+        temp_tokens$labor_stay_code[a] = 1
+      } else if (temp_tokens$key_press[a] == '78'){
+        temp_tokens$labor_stay_code[a] = 0
+      } 
+    }
+    else if (temp_tokens$test_part[a] == 'decision_kitten' | temp_tokens$test_part[a] == "1" | temp_tokens$test_part[a] == "2" | temp_tokens$test_part[a] == 'decision_fashion' | temp_tokens$test_part[a] == "3" | temp_tokens$test_part[a] == "4" | temp_tokens$test_part[a] == "timeout"| temp_tokens$test_part[a] == "set_goal"){
+        temp_tokens$labor_stay_code[a] = 0
+        }
+    a = a + 1
+  }
+
+  temp_tokens$labor_stay <- cumsum(temp_tokens$labor_stay_code)
+
+  # some case, the last-trial decision of stay/switch is not recorded in the summed data, therefore, here to update the dat_1 and dat_2 
+  dat_1$labor_stay[n] <- max(temp_tokens$labor_stay)
+  # dat_2$labor_stay[n] <- max(temp_tokens$labor_stay)
+  # temp_tokens$labor_stay <- temp_tokens$stay_stroop_count + temp_tokens$stay_balloon_count 
+
+  # filter out 
+  temp_tokens <- filter(temp_tokens, test_part %in% c("timeout", "decision_balloon", "decision_stroop", "decision_kitten", "decision_fashion","set_goal")) %>% dplyr::select(time_elapsed, test_part, earned_tokens, balloon_tokens_count, stroop_tokens_count, token_goal, labor_stay, switch_ID, tokens_switch,Switch_State_curr, Switch_State_pre)
+
+  # first row value is always 0
+  temp_tokens$balloon_tokens_count[1] <- 0
+  temp_tokens$stroop_tokens_count[1] <- 0
+  
+  # make the NAs in balloon_tokens_count & stroop_tokens_count inherit from the last valid value
+  # https://stackoverflow.com/questions/7735647/replacing-nas-with-latest-non-na-value 
+  temp_tokens$balloon_tokens_count_fill <- na.locf(temp_tokens$balloon_tokens_count)
+  temp_tokens$stroop_tokens_count_fill <- na.locf(temp_tokens$stroop_tokens_count)
+  
+  # combine balloon_tokens_count & stroop_tokens_count into cumulative cumulative_tokens
+  temp_tokens$cumulative_tokens <- temp_tokens$balloon_tokens_count_fill + temp_tokens$stroop_tokens_count_fill
+  
+  # merge goal-setting with time_elapsed
+  goal_set <- c()
+  length(goals)
+  if (length(goals) == 1) {  # participants never reset the goal, gap is calculated as the cumulative earned tokens - initial goal
+    goal_set <- rep(initial_goal, times = length(temp_tokens$cumulative_tokens))
+    # goal_gap <- temp_tokens$cumulative_tokens - initial_goal
+  }else if (length(goals) > 1){  # participants have revised the goal during the task
+    # gap <- rep(NA,length(temp_tokens$cumulative_tokens))
+    goal_setting$recalib_time <- (goal_setting$time_elapsed - time_node_1) / 1000
+    time_cut <- goal_setting$recalib_time
+    time_cut <- c(time_cut, max(temp$time_elapsed)) # 
+    goal_cut <- goal_setting$token_goal
+    # token_goal_cut <- goal_setting$token_goal[-1]
+    if (length(goal_setting$recalib_time) == 2){ # rest goal for one time, 
+      y <- length(which(temp_tokens$time_elapsed < time_cut[2]))
+      temp_goal_1 <- rep(goal_cut[1], times = y)
+      temp_goal_2 <- rep(goal_cut[2], times = (length(temp_tokens$time_elapsed) - y))
+      goal_set <- c(temp_goal_1, temp_goal_2)
+    } else if (length(goal_setting$recalib_time) > 2){ # reset goal for 2 times and more
+      i = 1
+      for (i in 1: length(goal_setting$recalib_time)){  # track time_node of each goal resetting during the task, the first one is initial goal setting
+        time_cut[i+1]
+        y <- length(which(temp_tokens$time_elapsed >= time_cut[i] & temp_tokens$time_elapsed < time_cut[i+1])) 
+        temp_goal <- rep(goal_cut[i], times = y)
+        goal_set <- c(goal_set, temp_goal)
+        i = i + 1
+      }
+      # goal_set <- c(goal_set, max(goal_cut)) # max(goal_cut) causes problem because not all participant increased their goal progressively
+      goal_set <- c(goal_set, goal_set[length(goal_set)])  
+    # if (n == 104 || n == 109 || n == 111){ # special subj
+    #   goal_set <- c(goal_set)
+    # } else if (n != 104 || n != 109 || n != 111){
+    #   goal_set <- c(goal_set, goal_set[length(goal_set)])
+    #   }
+    }
+  }
+    
+  temp_tokens$goal_set <- goal_set
+  temp_tokens$goal_gap <- temp_tokens$cumulative_tokens - temp_tokens$goal_set
+  
+  # find where fulfill the gap 
+  # index <- length(temp_tokens$goal_gap[temp_tokens$goal_gap < 0])
+  # labor_stay_pre_goal <- temp_tokens$labor_stay[index]
+  # labor_stay_post_goal <- max(temp_tokens$labor_stay) - temp_tokens$labor_stay[index]
+  # temp_reset_goal$labor_stay_pre_goal[n] <- labor_stay_pre_goal
+  # temp_reset_goal$labor_stay_post_goal[n] <- labor_stay_post_goal
+  
+  # capture the time_elapsed when fulfilling initial goal and its rate
+  if(max(temp_tokens$cumulative_tokens) >= initial_goal){
+      goal_fulfill_trials <- temp_tokens[(temp_tokens$cumulative_tokens > initial_goal), ]
+      goal_fulfill_time <- goal_fulfill_trials[1,]$time_elapsed
+      goal_fulfill_rate <- min(goal_fulfill_trials$cumulative_tokens) / goal_fulfill_time
+      temp_tokens$goal_fulfill_time <- goal_fulfill_time
+      temp_tokens$goal_fulfill_rate <- goal_fulfill_rate
+      dat_1$goal_fulfill_rate[n] <- goal_fulfill_rate
+      dat_1$goal_fulfill_time[n] <- goal_fulfill_time
+  }else if(max(temp_tokens$cumulative_tokens) < initial_goal){
+      temp_tokens$goal_fulfill_rate <- NA
+      temp_tokens$goal_fulfill_time <- NA
+      dat_1$goal_fulfill_rate[n] <- NA
+      dat_1$goal_fulfill_time[n] <- NA
+  }
+
+  # define code of 1 or 1 based on goal-reset, "set_goal"
+  # ResetGoal <- ifelse(temp_tokens$test_part == "set_goal", 1, 0)
+  # temp_tokens$ResetGoal <- ResetGoal
+  
+  # remove the event of "goalsetting", "set_goal"
+  temp_tokens <- filter(temp_tokens, !(test_part %in% c("goalsetting")))
+  
+  # calculate earned tokens in each trial/row
+  df <- diff(as.matrix(temp_tokens$cumulative_tokens))
+  new_df <- rbind(c(0), df)   # first row = 0, abandon df[length(df)+1] <- NA 
+  temp_tokens$tokens_per_trial <- new_df
+    
+  # calculate cumulative reward rate
+  cumulative_reward_rate <- temp_tokens$cumulative_tokens / temp_tokens$time_elapsed
+  temp_tokens$cumulative_reward_rate <- cumulative_reward_rate
+  
+  # define code of 1 or 0 based on decision_xxx for CurrState
+  CurrState_v1 <- ifelse(temp_tokens$test_part == "decision_balloon", 1,
+                      ifelse(temp_tokens$test_part == "decision_stroop", 1,
+                             ifelse(temp_tokens$test_part == "decision_kitten", 0,
+                                 ifelse(temp_tokens$test_part == "decision_fashion", 0,
+                                        NA))))
+  
+  CurrState_v2  <- ifelse(temp_tokens$test_part == "decision_balloon", 4,
+                      ifelse(temp_tokens$test_part == "decision_stroop", 3,
+                             ifelse(temp_tokens$test_part == "decision_kitten", 1,
+                                 ifelse(temp_tokens$test_part == "decision_fashion", 2,
+                                        NA))))
+  
+  temp_tokens$CurrState_v1  <- CurrState_v1 
+  temp_tokens$CurrState_v2  <- CurrState_v2 
+  
+  # calculate time_remains
+  remained_time <- rep(NA, times = length(temp_tokens$time_elapsed))
+  m = 1
+  for (m in 1: length(temp_tokens$time_elapsed)){
+    time_diff <- max(temp_tokens$time_elapsed) - temp_tokens$time_elapsed[m]
+    remained_time[m] <- time_diff
+    m = m + 1
+  }
+  temp_tokens$remained_time <- remained_time
+  
+  # add initial_goal
+  temp_tokens$initial_goal <- initial_goal
+  temp_tokens$goal_reset <- length(goals)-1
+  
+  # calculate post_gap_reaching rate v1: ( final earned tokens - initial goal ) / time 
+  gap_v1 <- max(temp_tokens$cumulative_tokens) - initial_goal
+  time_v1 <- 3600 - goal_fulfill_time
+  rate_v1 <- gap_v1 / time_v1
+  temp_tokens$gap_v1 <- gap_v1
+  temp_tokens$time_v1 <- time_v1
+  temp_tokens$rate_v1 <- rate_v1  
+  dat_1$gap_rate_v1[n] <- rate_v1 
+  dat_1$gap_v1[n] <- gap_v1 
+  
+  # calculate gap_reaching trial_based rate v3: diff(gap) / diff(time)
+  diff_gap <- diff(as.matrix(temp_tokens$goal_gap))
+  diff_time <- diff(as.matrix(temp_tokens$time_elapsed))
+  diff_gap <- c(0, diff_gap)
+  diff_time <- c(0, diff_time)
+  rate_v3 <- diff_gap / diff_time
+  temp_tokens$gap_v3 <- diff_gap
+  temp_tokens$rate_v3 <- rate_v3
+  temp_tokens$time_v3 <- diff_time
+  
+  # add subj_ID
+  subj <- rep(n, times = length(temp_tokens$earned_tokens))
+  temp_tokens$subj <- subj
+
+  # add trial_ID
+  trial <- seq(1, length(temp_tokens$earned_tokens), 1)
+  temp_tokens$trial <- trial
+    
+  # remove rows with test_part "timeout"&"set_goal"
+  if (temp_tokens$time_elapsed[length(temp_tokens$time_elapsed) -1] < 3600) {
+    temp_tokens <- filter(temp_tokens, !(test_part %in% c("set_goal")))
+  } else if (temp_tokens$time_elapsed[length(temp_tokens$time_elapsed) -1] >= 3600){
+    temp_tokens <- filter(temp_tokens, !(test_part %in% c("timeout", "set_goal")))
+  }
+  
+    
+  # define nextState_v1
+  nextState_v1 <- temp_tokens$CurrState_v1[2: length(temp_tokens$CurrState_v1)]
+  nextState_v1[length(nextState_v1)+1] <- NA
+  temp_tokens$nextState_v1 <- nextState_v1
+
+  # define preState_v1
+  preState_v1 <- temp_tokens$CurrState_v1[1: length(temp_tokens$CurrState_v1)-1]
+  preState_v1 <- c(NA, preState_v1)
+  temp_tokens$preState_v1 <- preState_v1
+  
+  # define nextState_v2
+  nextState_v2 <- temp_tokens$CurrState_v2[2: length(temp_tokens$CurrState_v2)]
+  nextState_v2[length(nextState_v2)+1] <- NA
+  temp_tokens$nextState_v2 <- nextState_v2
+  
+  # define preState_v2
+  preState_v2 <- temp_tokens$CurrState_v2[1: length(temp_tokens$CurrState_v2)-1]
+  preState_v2 <- c(NA, preState_v2)
+  temp_tokens$preState_v2 <- preState_v2
+  
+  # calculate switch mode: work -> leisure 1, lesiure -> work 2, lesiure -> leisure 3, work -> work 4
+  state_switch <- c()
+  s = 1
+  for (s in 1: length(temp_tokens$CurrState_v1)){
+    if(is.na(temp_tokens$CurrState_v1[s]) == T){
+      state_switch[s] = NA
+    }else if(is.na(temp_tokens$preState_v1[s]) == T){
+      state_switch[s] = NA
+    }else if(temp_tokens$preState_v1[s] == "1" && temp_tokens$CurrState_v1[s] == "0"){
+      state_switch[s] = 1
+    }else if(temp_tokens$preState_v1[s] == "0" && temp_tokens$CurrState_v1[s] == "1"){
+      state_switch[s] = 2
+    }else if(temp_tokens$preState_v1[s] == "0" && temp_tokens$CurrState_v1[s] == "0"){
+      state_switch[s] = 3
+    }else if(temp_tokens$preState_v1[s] == "1" && temp_tokens$CurrState_v1[s] == "1"){
+      state_switch[s] = 4
+    }
+    # print(state_switch[s])
+    s = s + 1
+  }
+  temp_tokens$state_switch <- state_switch
+  
+  # add IPS
+  IPS <- rep(dat_1$IPS[n], times = length(temp_tokens$earned_tokens))
+  temp_tokens$IPS <- IPS
+
+  # add reset_goal_count
+  reset_goal_count <- rep(dat_1$reset_goal_count[n], times = length(temp_tokens$earned_tokens))
+  temp_tokens$reset_goal_count <- reset_goal_count
+  
+  # add APS
+  APS <- rep(dat_1$APS[n], times = length(temp_tokens$earned_tokens))
+  temp_tokens$APS <- APS
+  
+  # add sustain_PS
+  sustain_PS <- rep(dat_1$sustain_PS[n], times = length(temp_tokens$earned_tokens))
+  temp_tokens$sustain_PS <- sustain_PS
+
+  # add onset_PS
+  onset_PS <- rep(dat_1$onset_PS[n], times = length(temp_tokens$earned_tokens))
+  temp_tokens$onset_PS <- onset_PS
+  
+  # add PS
+  PS <- rep(dat_1$PS[n], times = length(temp_tokens$earned_tokens))
+  temp_tokens$PS <- PS
+  
+  # add gender
+  gender <- rep(personal_info$gender[n], times = length(temp_tokens$earned_tokens))
+  temp_tokens$gender <- gender
+  
+  # add age
+  age <- rep(personal_info$age[n], times = length(temp_tokens$earned_tokens))
+  temp_tokens$age <- age
+  
+  # add income
+  income <- rep(personal_info$income[n], times = length(temp_tokens$earned_tokens))
+  temp_tokens$income <- income
+  
+  # add education
+  education <- rep(personal_info$education[n], times = length(temp_tokens$earned_tokens))
+  temp_tokens$education <- education
+  
+  # add time_remained, difference between current time_elapses with the maximum time_elapses (time_node_2)
+  time_remained <- time_node_2 
+  
+  # 
+  if (length(goals) == 1){
+    
+    temp_tokens$subj_reset0 <- cc 
+    temp_tokens$subj_reset <- NA 
+    cc <- cc + 1
+    dd <- dd + 0
+    
+    } else if (length(goals) > 1){
+      
+      temp_tokens$subj_reset0 <- NA 
+      temp_tokens$subj_reset <- dd
+      cc <- cc + 0
+      dd <- dd + 1
+      
+      }
+  
+  # add new_subj data to df:temp_switch_based
+  temp_trial_based <- rbind(temp_trial_based, temp_tokens)
+  
+  assign(j, z)
+  
+  n = n + 1
+  
+}
+
+
+
+temp_trial_based$income_scaled <- ifelse(temp_trial_based$income == '0', 1, 
+                    ifelse(temp_trial_based$income == '499', 2, 
+                           ifelse(temp_trial_based$income == '999', 3, 
+                               ifelse(temp_trial_based$income == '1499', 4, 
+                                      ifelse(temp_trial_based$income == '1999', 5,
+                                             ifelse(temp_trial_based$income == '2499', 6,
+                                                    ifelse(temp_trial_based$income == '2999', 7,
+                                                           8)))))))
+  
+  temp_trial_based$test_part <- factor(temp_trial_based$test_part, levels = c("decision_kitten","decision_fashion","decision_stroop","decision_balloon","timeout"), labels = c("kitten", "fashion", "stroop", "balloon", "timeout"))
+
+
+  write.csv(temp_trial_based,'C:\\Users\\Yue\\Dropbox\\Procrastination_Project\\raw_data\\dat_trial_based_Feb_2022.csv')
+  write.csv(temp_reset_goal,'C:\\Users\\Yue\\Dropbox\\Procrastination_Project\\raw_data\\dat_reset_goal_Feb_2022.csv')
+  
+time_diff = data.frame()  
+
+for (i in unique(temp_trial_based$subj)){
+  
+    temp_diff = data.frame()  
+    print(i)
+    df <- temp_trial_based[temp_trial_based$subj == i, ] %>% dplyr::select(time_elapsed, subj)
+    df$temp_diff <- c(0, diff(as.matrix(df$time_elapsed)))
+    df$subj <- rep(i, times = length(df$time_elapsed))
+    time_diff <- rbind(time_diff, df)
+    i = i + 1
+    
+}
+
+hist(time_diff$temp_diff)
+density(time_diff$temp_diff)
+median(time_diff$temp_diff) # 12.887
+sd(time_diff$temp_diff) # 26.49626
+max(time_diff$temp_diff) # 1461.244
+
+gap_3min <- unique(time_diff[time_diff$temp_diff > 180, ]$subj) 
+gap_3min
+length(gap_3min) # n= 31: c(1, 11, 14, 15, 38, 39, 41, 46, 47, 48, 49, 50, 52, 55, 57, 72, 75, 80, 84, 86, 89, 90, 91, 93, 97, 98, 100, 106, 109, 110, 115)
+
+gap_5min <- unique(time_diff[time_diff$temp_diff > 300, ]$subj) 
+gap_5min
+length(gap_5min) # n= 22: c(11,15,38,39,41,47,48,50,52,55,57,75,84,89,90,91,97,98,100,109,110,115)
+ 
+gap_6min <- unique(time_diff[time_diff$temp_diff > 360, ]$subj) 
+gap_6min
+length(gap_6min) # n= 20: c(11,15,38,39,41,47,48,50,55,57,75,84,89,90,91,98,100,109,110,115)
+
+gap_10min <- unique(time_diff[time_diff$temp_diff > 600, ]$subj) 
+gap_10min
+length(gap_10min) # n= 12, c(15, 41, 48, 55, 57, 75, 84, 89, 90, 91, 98, 110)
+
+```
+
+combine dat_3
+
+```{r combine dat_3}
+
+head(temp_reset_goal)
+
+dat_3 <- left_join(dat_1, temp_reset_goal, by.x = initial_goal)
+dat_3$goal_reset <- ifelse(dat_3$reset_goal_count == '0', 'No', 
+                    'Yes')
+
+length(dat_3$ID)  # 120
+
+### regroupd based on goal-reset
+dat_3_0reset <- dat_3[dat_3$reset_goal_count == 0, ]
+length(dat_3_0reset$initial_goal)  # 66
+print(dat_3_0reset$ID) 
+
+dat_3_reset <- dat_3[dat_3$reset_goal_count != 0, ]
+length(dat_3_reset$initial_goal)  # 54
+print(dat_3_reset$ID) 
+
+
+```
